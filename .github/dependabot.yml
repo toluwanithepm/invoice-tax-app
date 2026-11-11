@@ -4,6 +4,13 @@ updates:
     directory: /
     schedule: { interval: weekly }
     open-pull-requests-limit: 10
+    # Major versions (e.g. NestJS 11 -> 12, Prisma 6 -> 7) change APIs and are upgraded deliberately.
+    ignore:
+      - dependency-name: '*'
+        update-types: ['version-update:semver-major']
+    groups:
+      minor-and-patch:
+        update-types: ['minor', 'patch']
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }

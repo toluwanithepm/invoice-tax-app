@@ -30,7 +30,7 @@ jobs:
       - name: Create databases, migrate, configure runtime role
         run: pnpm --filter @einv/api db:setup
       - run: pnpm typecheck
-      - run: pnpm test
+      - run: pnpm exec turbo run test --continue
       - run: pnpm build
         env: { API_URL: http://localhost:4000 }
       - name: Dependency audit (production deps)
@@ -41,8 +41,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
-      - uses: gitleaks/gitleaks-action@v2
-        env: { GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}' }
+      # Full-history scan with the gitleaks CLI (the GitHub Action fails on a repository's first push).
+      - name: Scan for committed secrets
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.24.3 detect --source /repo --redact --verbose --exit-code 1
 
   codeql:
     runs-on: ubuntu-latest
