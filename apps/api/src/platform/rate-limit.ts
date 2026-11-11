@@ -17,8 +17,8 @@ export class RateLimitService {
     const windowMs = windowSec * 1000;
     const windowStart = new Date(Math.floor(Date.now() / windowMs) * windowMs);
     const rows = await this.prisma.$queryRaw<{ count: number }[]>`
-      INSERT INTO rate_limit_buckets (key, window_start, count) VALUES (${key}, ${windowStart}, 1)
-      ON CONFLICT (key, window_start) DO UPDATE SET count = rate_limit_buckets.count + 1
+      INSERT INTO app.rate_limit_buckets AS b (key, window_start, count) VALUES (${key}, ${windowStart}, 1)
+      ON CONFLICT (key, window_start) DO UPDATE SET count = b.count + 1
       RETURNING count`;
     const count = Number(rows[0]?.count ?? 0);
     return { allowed: count <= limit, count };
@@ -31,7 +31,7 @@ export class RateLimitService {
 
   /** Housekeeping, called by the jobs drain. */
   async purgeOlderThan(hours = 24) {
-    await this.prisma.$executeRaw`DELETE FROM rate_limit_buckets WHERE window_start < now() - make_interval(hours => ${hours})`;
+    await this.prisma.$executeRaw`DELETE FROM app.rate_limit_buckets WHERE window_start < now() - make_interval(hours => ${hours})`;
   }
 }
 

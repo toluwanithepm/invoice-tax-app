@@ -87,3 +87,21 @@ describe('plain-language zod defaults', () => {
     expect(r.error!.issues.find((i) => i.path[0] === 'name')!.message).toBe('This field is required.');
   });
 });
+
+describe('B2C and compliance calendar', () => {
+  it('splits VAT-inclusive amounts exactly', async () => {
+    const { splitGross } = await import('../src/vat');
+    expect(splitGross(1075, 'standard')).toEqual({ gross: 1075, net: 1000, vat: 75 });
+    const odd = splitGross(999.99, 'standard');
+    expect(Math.round((odd.net + odd.vat) * 100)).toBe(99999);
+    expect(splitGross(500, 'exempt')).toEqual({ gross: 500, net: 500, vat: 0 });
+  });
+  it('puts the B2C deadline at 23:59:59 Lagos time the next day', async () => {
+    const { b2cDeadline, b2cAutoSubmitAt, lagosToday, vatReturnDueDate, monthBounds } = await import('../src/compliance');
+    expect(b2cDeadline('2026-11-10').toISOString()).toBe('2026-11-11T22:59:59.000Z');
+    expect(b2cAutoSubmitAt('2026-11-10').toISOString()).toBe('2026-11-10T23:30:00.000Z');
+    expect(lagosToday(new Date('2026-11-10T23:30:00Z'))).toBe('2026-11-11');
+    expect(vatReturnDueDate('2026-12')).toBe('2027-01-21');
+    expect(monthBounds('2028-02')).toEqual({ start: '2028-02-01', end: '2028-02-29' });
+  });
+});

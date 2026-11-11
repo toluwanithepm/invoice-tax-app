@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { ROLE_LABELS, ROLES, type Role } from '@einv/shared';
 import { BrandingForm } from '@/components/branding-form';
 import { TwoFactorCard } from '@/components/two-factor-card';
+import { FirmLinkCard } from '@/components/firm-link-card';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Checkbox, Field, Input, Select } from '@/components/ui/form';
@@ -56,7 +57,12 @@ function Settings() {
         ) : (
           <Alert>Only owners, admins and accountants can change invoice details.</Alert>
         ))}
-      {tab === 'members' && <MembersTab />}
+      {tab === 'members' && (
+        <>
+          <MembersTab />
+          <FirmLinkCard />
+        </>
+      )}
       {tab === 'security' && <SecurityTab ws={ws.data} canManage={can('workspace.manage')} />}
     </>
   );

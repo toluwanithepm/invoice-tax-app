@@ -12,7 +12,10 @@ import { SharingService } from '../sharing/sharing.service';
 import { invoiceDto } from './invoice.mapper';
 import { InvoicesService } from './invoices.service';
 
-const listQuery = listQuerySchema.extend({ docType: z.enum(['invoice', 'credit_note', 'debit_note']).optional() });
+const listQuery = listQuerySchema.extend({
+  docType: z.enum(['invoice', 'credit_note', 'debit_note']).optional(),
+  customerId: z.string().uuid().optional(),
+});
 
 @Controller('v1/workspaces/:workspaceId/invoices')
 export class InvoicesController {

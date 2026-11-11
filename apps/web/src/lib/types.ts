@@ -7,7 +7,8 @@ export interface Me {
   phone: string | null;
   twoFactorEnabled: boolean;
   mfaVerified: boolean;
-  workspaces: { id: string; name: string; role: Role; mbsStatus: MbsStatus }[];
+  workspaces: { id: string; name: string; role: Role; mbsStatus: MbsStatus; viaFirmId: string | null }[];
+  firms: { id: string; name: string; role: 'admin' | 'accountant' }[];
 }
 
 export type MbsStatus = 'not_connected' | 'sandbox' | 'sandbox_passed' | 'live';
@@ -80,6 +81,7 @@ export interface InvoiceSummary {
   vatTotal: number;
   irn: string | null;
   clearedAt: string | null;
+  paidAt: string | null;
   createdAt: string;
 }
 

@@ -21,6 +21,10 @@ export const PERMISSIONS = {
   'invoices.approve': ['owner', 'approver'],
   'invoices.share': ['owner', 'admin', 'clerk', 'approver', 'accountant'],
   'audit.view': ['owner', 'admin', 'accountant'],
+  'reports.view': ['owner', 'admin', 'approver', 'viewer', 'accountant'],
+  'vat.declare': ['owner', 'admin', 'accountant'],
+  'invoices.payments': ['owner', 'admin', 'clerk', 'accountant'],
+  'b2c.manage': ['owner', 'admin', 'clerk', 'accountant'],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

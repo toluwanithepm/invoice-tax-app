@@ -1,7 +1,7 @@
 'use client';
 import * as DM from '@radix-ui/react-dropdown-menu';
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronsUpDown, FileText, History, LayoutDashboard, LogOut, Menu, Package, Plus, Settings, Upload, Users, X } from 'lucide-react';
+import { BarChart3, Briefcase, ChevronsUpDown, FileText, History, LayoutDashboard, LogOut, Menu, Package, Plus, Settings, ShoppingCart, Upload, Users, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -15,6 +15,8 @@ import { cn } from '@/lib/utils';
 const NAV: { href: string; label: string; icon: React.ElementType; perm: Permission; exact?: boolean }[] = [
   { href: '', label: 'Dashboard', icon: LayoutDashboard, perm: 'workspace.view', exact: true },
   { href: '/invoices', label: 'Invoices', icon: FileText, perm: 'workspace.view' },
+  { href: '/reports', label: 'Reports & VAT', icon: BarChart3, perm: 'reports.view' },
+  { href: '/b2c', label: 'Retail sales (B2C)', icon: ShoppingCart, perm: 'workspace.view' },
   { href: '/customers', label: 'Customers', icon: Users, perm: 'workspace.view' },
   { href: '/products', label: 'Products', icon: Package, perm: 'workspace.view' },
   { href: '/import', label: 'Import', icon: Upload, perm: 'records.edit' },
@@ -143,7 +145,7 @@ function WorkspaceSwitcher() {
       <DM.Portal>
         <DM.Content align="start" sideOffset={6} className="z-50 min-w-56 rounded-lg border border-line bg-white p-1 shadow-lg">
           <DM.Label className="px-2 py-1.5 text-xs text-subtle">Your businesses</DM.Label>
-          {me.data?.workspaces.map((w) => (
+          {me.data?.workspaces.filter((w) => !w.viaFirmId).map((w) => (
             <DM.Item
               key={w.id}
               onSelect={() => router.push(`/w/${w.id}`)}
@@ -152,10 +154,48 @@ function WorkspaceSwitcher() {
               {w.name}
             </DM.Item>
           ))}
+          {me.data?.firms.map((f) => {
+            const clients = me.data!.workspaces.filter((w) => w.viaFirmId === f.id);
+            if (!clients.length) return null;
+            return (
+              <div key={f.id}>
+                <DM.Label className="px-2 pb-1 pt-2 text-xs text-subtle">Clients of {f.name}</DM.Label>
+                {clients.map((w) => (
+                  <DM.Item
+                    key={w.id}
+                    onSelect={() => router.push(`/w/${w.id}`)}
+                    className={cn('cursor-pointer rounded-md px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-slate-100', w.id === wsId && 'font-medium text-brand-800')}
+                  >
+                    {w.name}
+                  </DM.Item>
+                ))}
+              </div>
+            );
+          })}
+          {!!me.data?.firms.length && (
+            <>
+              <DM.Separator className="my-1 h-px bg-line" />
+              <DM.Label className="px-2 py-1.5 text-xs text-subtle">Accounting firms</DM.Label>
+              {me.data.firms.map((f) => (
+                <DM.Item
+                  key={f.id}
+                  onSelect={() => router.push(`/f/${f.id}`)}
+                  className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-slate-100"
+                >
+                  <Briefcase className="size-4 text-subtle" /> {f.name}
+                </DM.Item>
+              ))}
+            </>
+          )}
           <DM.Separator className="my-1 h-px bg-line" />
           <DM.Item onSelect={() => router.push('/onboarding')} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-slate-100">
             <Plus className="size-4" /> Add a business
           </DM.Item>
+          {!me.data?.firms.length && (
+            <DM.Item onSelect={() => router.push('/firm')} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none data-[highlighted]:bg-slate-100">
+              <Briefcase className="size-4" /> I'm an accountant
+            </DM.Item>
+          )}
         </DM.Content>
       </DM.Portal>
     </DM.Root>

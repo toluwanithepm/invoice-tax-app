@@ -10,8 +10,10 @@ export default function Home() {
   const router = useRouter();
   useEffect(() => {
     if (!me.data) return;
-    const first = me.data.workspaces[0];
-    if (!first) router.replace('/onboarding');
+    const first = me.data.workspaces.find((w) => !w.viaFirmId) ?? null;
+    const firm = me.data.firms[0];
+    if (!first && firm) router.replace(`/f/${firm.id}`);
+    else if (!first) router.replace('/onboarding');
     else if (first.mbsStatus !== 'live' && ['owner', 'admin', 'accountant'].includes(first.role)) router.replace(`/onboarding?ws=${first.id}`);
     else router.replace(`/w/${first.id}`);
   }, [me.data, router]);

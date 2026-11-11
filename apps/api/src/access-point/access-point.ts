@@ -56,6 +56,8 @@ export interface AccessPointProvider {
   connectTaxpayer(tin: string): Promise<{ ok: true; reference: string }>;
   /** Submits a document for clearance. Must be idempotent on idempotencyKey (NFR-4). Throws ProviderUnavailableError. */
   clear(req: ClearanceRequest): Promise<ClearanceResult>;
+  /** E5-1: daily batch of retail (B2C) sales. Idempotent on idempotencyKey. Throws ProviderUnavailableError. */
+  reportB2C(req: B2cReportRequest): Promise<B2cReportResult>;
   /** E8-1 (Phase 3): IRN lookup. */
   lookupIrn(irn: string): Promise<{ valid: boolean; sellerTin?: string; total?: number; issueDate?: string }>;
 }
@@ -69,3 +71,13 @@ export interface TaxIdRecord {
 export interface TaxIdRegistry {
   lookup(tin: string): Promise<TaxIdRecord>;
 }
+
+export interface B2cReportRequest {
+  idempotencyKey: string;
+  sellerTin: string;
+  salesDate: string; // YYYY-MM-DD
+  noSales: boolean;
+  rows: { receiptNo: string; vatTreatment: string; gross: number; net: number; vat: number }[];
+  totals: { gross: number; net: number; vat: number };
+}
+export type B2cReportResult = { status: 'accepted'; reference: string; duplicate?: boolean } | { status: 'rejected'; errors: string[] };

@@ -168,3 +168,37 @@ export const IMPORT_FIELDS = {
 export const importCommitSchema = z.object({
   mapping: z.record(z.string(), z.string()),
 });
+
+// ── Reconciliation & reports (E7) ─────────────────────────────────────
+export const monthSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Use the format YYYY-MM.');
+export const vatDeclarationSchema = z.object({
+  declaredVat: money,
+  note: optionalText(500),
+});
+export type VatDeclarationInput = z.infer<typeof vatDeclarationSchema>;
+export const markPaidSchema = z.object({ paid: z.boolean(), paidOn: isoDate.optional() });
+
+// ── B2C reporting (E5) ────────────────────────────────────────────────
+export const B2C_FIELDS = ['date', 'receiptNo', 'description', 'amount', 'vatTreatment', 'buyerName', 'buyerPhone'] as const;
+export const B2C_REQUIRED_FIELDS = ['date', 'receiptNo', 'amount'] as const;
+/** One retail sale from a POS export. Buyer details are optional (decision: not required for B2C). */
+export const b2cSaleSchema = z.object({
+  date: isoDate,
+  receiptNo: trimmed(64).min(1, 'Every sale needs a receipt number.'),
+  description: optionalText(200),
+  amount: z.coerce.number({ error: 'Enter the amount paid.' }).positive('The amount must be more than zero.').max(1e10),
+  vatTreatment: z.enum(VAT_TREATMENTS, { error: 'VAT must be standard, zero-rated or exempt.' }).default('standard'),
+  buyerName: optionalText(120),
+  buyerPhone: optionalText(20),
+});
+export type B2cSaleInput = z.infer<typeof b2cSaleSchema>;
+
+// ── Accounting firms (E6) ─────────────────────────────────────────────
+export const FIRM_ROLES = ['admin', 'accountant'] as const;
+export const firmCreateSchema = z.object({ name: trimmed(200).min(2, 'Enter the firm name.') });
+export const firmInviteSchema = z.object({ email: emailSchema, role: z.enum(FIRM_ROLES).default('accountant') });
+export const firmClientCreateSchema = workspaceCreateSchema.extend({
+  ownerEmail: emailSchema.optional().nullable().or(z.literal('').transform(() => null)),
+});
+export type FirmClientCreate = z.infer<typeof firmClientCreateSchema>;
+export const firmConnectSchema = z.object({ code: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{8}$/, 'A firm code has 8 letters or digits.') });

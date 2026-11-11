@@ -7,7 +7,7 @@ through the Merchant Buyer Solution (MBS), without an ERP. Built from the FRD
 - **Architecture:** [docs/architecture.md](docs/architecture.md)
 - **Security:** [docs/security.md](docs/security.md)
 
-## What's in this build (Phases 0–1)
+## What's in this build (Phases 0–2)
 
 | Area | Stories |
 |---|---|
@@ -17,6 +17,9 @@ through the Merchant Buyer Solution (MBS), without an ERP. Built from the FRD
 | Invoices: drafts with autosave, live VAT totals, pre-submission checks, one-click clearance, IRN + QR, PDF, share by WhatsApp/email/link, queue + retry when NRS is down | E3-1 … E3-7 |
 | Credit and debit notes against an IRN | E4-1, E4-2 |
 | Roles, invitations, approvals, append-only audit log | E9-1, E9-2 (+ approval groundwork for E6-3/E9-3) |
+| VAT reconciliation against the filed figure, Excel/PDF exports, sales & outstanding dashboard, mark paid | E7-1 … E7-3 |
+| Retail (B2C) daily reporting: POS upload, auto-submit, "no sales", deadline alerts | E5-1 … E5-3 |
+| Accounting firms: client dashboard, firm-level access, connect codes, client approval links, firm bill | E6-1 … E6-4 (payment collection in Phase 3) |
 
 NRS MBS, the Tax ID registry, SMS and WhatsApp are behind interfaces with **mock/console
 implementations** until the APP partnership and provider accounts exist.

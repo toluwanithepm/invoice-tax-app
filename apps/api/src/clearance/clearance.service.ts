@@ -18,6 +18,7 @@ import { conflict, forbidden, unprocessable } from '../common/errors';
 import { sha256 } from '../common/crypto';
 import { isoDay, num } from '../common/zod';
 import { ctx, requireUserId, requireWorkspaceId } from '../common/request-context';
+import { env } from '../config/env';
 import { InvoicesService } from '../invoices/invoices.service';
 import { invoiceDto, type InvoiceWithRelations } from '../invoices/invoice.mapper';
 import { sellerParty } from '../workspaces/workspaces.service';
@@ -318,7 +319,7 @@ export class ClearanceService implements OnModuleInit {
         channel: 'email',
         recipient: u.email!,
         subject: 'An invoice is waiting for your approval',
-        body: `${ctx().userName ?? 'A colleague'} sent an invoice for ₦${num(inv.total).toLocaleString('en-NG')} to ${inv.customer?.name ?? 'a customer'} for approval.`,
+        body: `${ctx().userName ?? 'A colleague'} sent an invoice for ₦${num(inv.total).toLocaleString('en-NG')} to ${inv.customer?.name ?? 'a customer'} for approval. Review and approve it here: ${env().PUBLIC_APP_URL}/w/${ws.id}/invoices/${inv.id}`,
       });
     }
   }

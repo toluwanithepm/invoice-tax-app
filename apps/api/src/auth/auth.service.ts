@@ -188,11 +188,24 @@ export class AuthService {
   async me(userId: string) {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw notFound('Your account');
-    const memberships = await this.prisma.scoped({ workspaceId: null, userId }).membership.findMany({
-      where: { userId },
-      include: { workspace: { select: { id: true, legalName: true, tradingName: true, mbsStatus: true } } },
-      orderBy: { createdAt: 'asc' },
-    });
+    const db = this.prisma.scoped({ workspaceId: null, userId });
+    const [memberships, firmMemberships] = await Promise.all([
+      db.membership.findMany({
+        where: { userId },
+        include: { workspace: { select: { id: true, legalName: true, tradingName: true, mbsStatus: true } } },
+        orderBy: { createdAt: 'asc' },
+      }),
+      db.firmMember.findMany({ where: { userId }, include: { firm: { select: { id: true, name: true } } }, orderBy: { createdAt: 'asc' } }),
+    ]);
+    // Firm clients the user reaches through their firm (E6-1), unless they're also a direct member.
+    const direct = new Set(memberships.map((m) => m.workspaceId));
+    const firmClients = firmMemberships.length
+      ? await db.workspace.findMany({
+          where: { firmId: { in: firmMemberships.map((f) => f.firmId) }, id: { notIn: [...direct] } },
+          select: { id: true, legalName: true, tradingName: true, mbsStatus: true, firmId: true },
+          orderBy: { legalName: 'asc' },
+        })
+      : [];
     return {
       id: user.id,
       name: user.name,
@@ -200,12 +213,23 @@ export class AuthService {
       phone: user.phone,
       twoFactorEnabled: !!user.totpEnabledAt,
       mfaVerified: !!ctx().mfaVerified,
-      workspaces: memberships.map((m) => ({
-        id: m.workspace.id,
-        name: m.workspace.tradingName ?? m.workspace.legalName,
-        role: m.role,
-        mbsStatus: m.workspace.mbsStatus,
-      })),
+      firms: firmMemberships.map((f) => ({ id: f.firm.id, name: f.firm.name, role: f.role })),
+      workspaces: [
+        ...memberships.map((m) => ({
+          id: m.workspace.id,
+          name: m.workspace.tradingName ?? m.workspace.legalName,
+          role: m.role,
+          mbsStatus: m.workspace.mbsStatus,
+          viaFirmId: null as string | null,
+        })),
+        ...firmClients.map((w) => ({
+          id: w.id,
+          name: w.tradingName ?? w.legalName,
+          role: 'accountant',
+          mbsStatus: w.mbsStatus,
+          viaFirmId: w.firmId,
+        })),
+      ],
     };
   }
 

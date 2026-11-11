@@ -253,6 +253,7 @@ function InvoiceView({ inv }: { inv: Invoice }) {
                 <Share2 /> Send to customer
               </Button>
             )}
+            {inv.status === 'cleared' && inv.docType === 'invoice' && <PaymentControl inv={inv} onChange={refresh} />}
             <Button variant="secondary" className="w-full" asChild>
               <a href={`/api/v1/workspaces/${ws}/invoices/${inv.id}/pdf`} target="_blank" rel="noopener">
                 <Download /> Download PDF
@@ -291,6 +292,42 @@ function InvoiceView({ inv }: { inv: Invoice }) {
       )}
     </div>
   );
+}
+
+/** E7-3: record payment (the only change allowed on a cleared invoice). */
+function PaymentControl({ inv, onChange }: { inv: Invoice; onChange: (r: Invoice) => void }) {
+  const ws = useWsId();
+  const { can } = useRole();
+  const [busy, setBusy] = useState(false);
+  async function set(paid: boolean) {
+    setBusy(true);
+    try {
+      const r = await api.patch<{ paidAt: string | null }>(`/v1/workspaces/${ws}/invoices/${inv.id}/payment`, { paid });
+      onChange({ ...inv, paidAt: r.paidAt });
+      toast.success(paid ? 'Marked as paid' : 'Marked as unpaid');
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (inv.paidAt) {
+    return (
+      <div className="flex items-center justify-between rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-900">
+        <span>Paid {shortDate(inv.paidAt)}</span>
+        {can('invoices.payments') && (
+          <button className="text-xs underline" onClick={() => set(false)} disabled={busy}>
+            Undo
+          </button>
+        )}
+      </div>
+    );
+  }
+  return can('invoices.payments') ? (
+    <Button variant="secondary" className="w-full" onClick={() => set(true)} loading={busy}>
+      <Check /> Mark as paid
+    </Button>
+  ) : null;
 }
 
 function History({ inv }: { inv: Invoice }) {

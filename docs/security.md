@@ -10,7 +10,8 @@ customer doesn't get paid, so integrity and availability matter as much as confi
 | Threat | Example | Controls |
 |---|---|---|
 | **Spoofing** – account takeover | Stolen phone/email, OTP brute force, session theft | Passwordless OTP (6 digits, 5-min TTL, HMAC-hashed, 5 attempts, single use, rate-limited per identifier and IP); optional TOTP 2FA with hashed recovery codes; workspace can *require* 2FA for owner/admin/accountant; httpOnly `__Host-` session cookie; 30-min idle / 12-h absolute expiry; token rotation on 2FA; "sign out everywhere" |
-| **Tampering** – altering a cleared invoice | Insider edits totals after clearance | DB trigger blocks any change to a cleared invoice or its lines (`app.lock_cleared_invoice`, `app.lock_cleared_lines`); corrections only via credit/debit notes linked to the IRN; buyer/seller snapshots frozen at submission |
+| **Tampering** – altering an accepted B2C report | Insider edits a day's sales after NRS accepted it | DB triggers block updates to accepted reports and their sales (`app.lock_accepted_b2c*`) |
+| **Tampering** – altering a cleared invoice | Insider edits totals after clearance | DB trigger blocks any change to a cleared invoice or its lines except the paid date (`app.lock_cleared_invoice`, `app.lock_cleared_lines`); corrections only via credit/debit notes linked to the IRN; buyer/seller snapshots frozen at submission |
 | **Tampering** – client-side totals | Browser sends a wrong total | Server always recomputes totals from lines in integer kobo (`packages/shared/src/vat.ts`); MBS rule NRS-E106 double-checks |
 | **Repudiation** | "I didn't submit that" | Append-only `audit_events` (no UPDATE/DELETE grant + trigger), actor, IP, request id; every clearance attempt stored with request hash and response |
 | **Information disclosure** – cross-tenant leak | Bug omits a `workspace_id` filter | Two layers: (1) `WorkspaceGuard` requires membership + explicit permission on every `:workspaceId` route; (2) Postgres RLS on every tenant table, API connects as `app_runtime` (no BYPASSRLS), context set per transaction. Automated cross-tenant tests in CI |
@@ -56,6 +57,12 @@ request ─▶ CsrfGuard ─▶ SessionGuard ─▶ WorkspaceGuard ─▶ RateLi
 - Two narrow `SECURITY DEFINER` functions resolve a share-link or invitation token hash to a
   workspace id, the only cross-tenant lookups in the system.
 - Background jobs carry their `workspace_id` and run under that context.
+- **Accounting firms (Phase 2):** `WorkspaceGuard` grants the `accountant` role when the user belongs to the firm
+  linked to the workspace. RLS lets firm members *list* their firm's workspaces (`ws_select` uses
+  `app.user_firm_ids()`, a `SECURITY DEFINER` helper that avoids recursive policies); every other table is still keyed
+  on the single workspace the guard sets. Firm invitations are accepted inside `app.accept_firm_invitation`, which checks
+  the token and the invitee's email together. Linking needs the client's owner/admin and the firm's code; the
+  client can unlink at any time, which removes the firm's access immediately.
 
 ## 5. Data protection (NFR-6, NFR-9, NFR-12)
 

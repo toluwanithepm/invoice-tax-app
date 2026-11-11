@@ -48,15 +48,22 @@ export class MembersService {
 
   async invite(email: string, role: Role) {
     if (role === 'owner' && ctx().role !== 'owner') throw forbidden('Only an owner can invite another owner.');
-    const workspaceId = requireWorkspaceId();
+    return this.createInvitation(requireWorkspaceId(), email, role);
+  }
+
+  /**
+   * Creates and emails an invitation. Callers enforce who may invite whom: `invite` above for
+   * workspace members, FirmsService for a firm inviting the owner of a client it just set up.
+   */
+  async createInvitation(workspaceId: string, email: string, role: Role) {
     const existing = await this.prisma.user.findUnique({ where: { email } });
     if (existing) {
-      const m = await this.prisma.scoped().membership.findUnique({ where: { workspaceId_userId: { workspaceId, userId: existing.id } } });
+      const m = await this.prisma.scoped({ workspaceId }).membership.findUnique({ where: { workspaceId_userId: { workspaceId, userId: existing.id } } });
       if (m) throw conflict(`${email} is already a member of this workspace.`, 'ALREADY_MEMBER');
     }
     const token = randomToken();
-    const ws = await this.prisma.scoped().workspace.findUniqueOrThrow({ where: { id: workspaceId } });
-    const inv = await this.prisma.scoped().invitation.create({
+    const ws = await this.prisma.scoped({ workspaceId }).workspace.findUniqueOrThrow({ where: { id: workspaceId } });
+    const inv = await this.prisma.scoped({ workspaceId }).invitation.create({
       data: {
         workspaceId,
         email,
@@ -74,7 +81,7 @@ export class MembersService {
       subject: `You've been invited to ${ws.tradingName ?? ws.legalName}`,
       body: `${ctx().userName ?? 'A colleague'} invited you to join ${ws.tradingName ?? ws.legalName} as ${ROLE_LABELS[role]}. Accept within 7 days: ${url}`,
     });
-    await this.audit.record({ entity: 'invitation', entityId: inv.id, action: 'member.invited', detail: { email, role } });
+    await this.audit.record({ entity: 'invitation', entityId: inv.id, action: 'member.invited', detail: { email, role }, workspaceId });
     return { id: inv.id, email, role, expiresAt: inv.expiresAt.toISOString(), inviteUrl: url };
   }
 

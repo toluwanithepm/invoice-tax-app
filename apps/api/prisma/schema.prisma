@@ -91,23 +91,46 @@ model DataSubjectRequest {
 // ── Tenancy ─────────────────────────────────────────────────────────
 
 model Firm {
-  id         String       @id @default(uuid(7)) @db.Uuid
-  name       String
-  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
-  members    FirmMember[]
-  workspaces Workspace[]
+  id             String           @id @default(uuid(7)) @db.Uuid
+  name           String
+  createdBy      String           @map("created_by") @db.Uuid
+  connectCode    String           @unique @map("connect_code") // clients enter this to give the firm access
+  perClientPrice Int              @default(4000) @map("per_client_price") // Naira / client / month (E6-4)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  members        FirmMember[]
+  invitations    FirmInvitation[]
+  workspaces     Workspace[]
 
   @@map("firms")
 }
 
 model FirmMember {
-  firmId  String @map("firm_id") @db.Uuid
-  userId  String @map("user_id") @db.Uuid
-  role    String @default("accountant")
-  firm    Firm   @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  firmId    String   @map("firm_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  role      String   @default("accountant") // admin | accountant
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  firm      Firm     @relation(fields: [firmId], references: [id], onDelete: Cascade)
 
   @@id([firmId, userId])
+  @@index([userId])
   @@map("firm_members")
+}
+
+model FirmInvitation {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  firmId     String    @map("firm_id") @db.Uuid
+  firm       Firm      @relation(fields: [firmId], references: [id], onDelete: Cascade)
+  email      String
+  role       String
+  tokenHash  String    @unique @map("token_hash")
+  invitedBy  String    @map("invited_by") @db.Uuid
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(3)
+  acceptedAt DateTime? @map("accepted_at") @db.Timestamptz(3)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([firmId])
+  @@map("firm_invitations")
 }
 
 model Workspace {
@@ -140,6 +163,8 @@ model Workspace {
   mbsLiveAt           DateTime?    @map("mbs_live_at") @db.Timestamptz(3)
   approvalRequired    Boolean      @default(false) @map("approval_required")
   require2fa          Boolean      @default(false) @map("require_2fa")
+  b2cEnabled          Boolean      @default(false) @map("b2c_enabled")
+  firmLinkedAt        DateTime?    @map("firm_linked_at") @db.Timestamptz(3)
   plan                String       @default("trial")
   trialEndsAt         DateTime?    @map("trial_ends_at") @db.Timestamptz(3)
   createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
@@ -149,7 +174,10 @@ model Workspace {
   customers           Customer[]
   products            Product[]
   invoices            Invoice[]
+  b2cReports          B2cReport[]
+  vatDeclarations     VatDeclaration[]
 
+  @@index([firmId])
   @@map("workspaces")
 }
 
@@ -266,6 +294,7 @@ model Invoice {
   irn                String?            @unique
   qrPayload          String?            @map("qr_payload")
   clearedAt          DateTime?          @map("cleared_at") @db.Timestamptz(3)
+  paidAt             DateTime?          @map("paid_at") @db.Timestamptz(3) // E7-3; the only field that may change after clearance
   idempotencyKey     String?            @unique @map("idempotency_key")
   attempts           Int                @default(0)
   firstAttemptAt     DateTime?          @map("first_attempt_at") @db.Timestamptz(3)
@@ -352,6 +381,66 @@ model ShareEvent {
 
   @@index([shareLinkId])
   @@map("share_events")
+}
+
+// ── Reconciliation (E7) ─────────────────────────────────────────────
+
+model VatDeclaration {
+  workspaceId  String    @map("workspace_id") @db.Uuid
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  month        String // YYYY-MM
+  declaredVat  Decimal   @map("declared_vat") @db.Decimal(18, 2) // output VAT the business filed for the month
+  note         String?
+  declaredBy   String    @map("declared_by") @db.Uuid
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@id([workspaceId, month])
+  @@map("vat_declarations")
+}
+
+// ── B2C reporting (E5) ──────────────────────────────────────────────
+
+model B2cReport {
+  id           String     @id @default(uuid(7)) @db.Uuid
+  workspaceId  String     @map("workspace_id") @db.Uuid
+  workspace    Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Restrict)
+  salesDate    DateTime   @map("sales_date") @db.Date
+  status       String     @default("pending") // pending | submitting | accepted | rejected | failed
+  noSales      Boolean    @default(false) @map("no_sales")
+  rowCount     Int        @default(0) @map("row_count")
+  netTotal     Decimal    @default(0) @map("net_total") @db.Decimal(18, 2)
+  vatTotal     Decimal    @default(0) @map("vat_total") @db.Decimal(18, 2)
+  grossTotal   Decimal    @default(0) @map("gross_total") @db.Decimal(18, 2)
+  deadlineAt   DateTime   @map("deadline_at") @db.Timestamptz(3)
+  reportRef    String?    @map("report_ref")
+  attempts     Int        @default(0)
+  lastErrors   Json?      @map("last_errors")
+  submittedAt  DateTime?  @map("submitted_at") @db.Timestamptz(3)
+  acceptedAt   DateTime?  @map("accepted_at") @db.Timestamptz(3)
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  sales        B2cSale[]
+
+  @@unique([workspaceId, salesDate])
+  @@map("b2c_reports")
+}
+
+model B2cSale {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  workspaceId   String    @map("workspace_id") @db.Uuid
+  reportId      String    @map("report_id") @db.Uuid
+  report        B2cReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  receiptNo     String    @map("receipt_no")
+  description   String?
+  grossAmount   Decimal   @map("gross_amount") @db.Decimal(18, 2) // VAT-inclusive, as POS systems record it
+  vatTreatment  String    @map("vat_treatment")
+  net           Decimal   @db.Decimal(18, 2)
+  vat           Decimal   @db.Decimal(18, 2)
+  buyerName     String?   @map("buyer_name")
+  buyerPhone    String?   @map("buyer_phone")
+
+  @@unique([reportId, receiptNo])
+  @@map("b2c_sales")
 }
 
 // ── Platform ────────────────────────────────────────────────────────

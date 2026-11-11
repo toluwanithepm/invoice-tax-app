@@ -3,8 +3,9 @@ import { twMerge } from 'tailwind-merge';
 
 export const cn = (...inputs: ClassValue[]) => twMerge(clsx(inputs));
 
+// `|| 0` folds -0 (e.g. a negated zero credit-note total) into 0 so it never prints as "₦-0.00".
 export const naira = (n: number | null | undefined) =>
-  '₦' + Number(n ?? 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  '₦' + (Number(n ?? 0) || 0).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export const shortDate = (iso: string | null | undefined) =>
   iso ? new Date(iso.length === 10 ? iso + 'T00:00:00' : iso).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';

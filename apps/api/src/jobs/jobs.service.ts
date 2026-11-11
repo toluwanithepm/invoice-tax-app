@@ -55,9 +55,9 @@ export class JobsService implements OnApplicationBootstrap, OnModuleDestroy {
     let failed = 0;
     try {
       const jobs = await this.prisma.$queryRaw<Job[]>`
-        UPDATE jobs SET status = 'running', locked_at = now(), attempts = attempts + 1, updated_at = now()
+        UPDATE app.jobs SET status = 'running', locked_at = now(), attempts = attempts + 1, updated_at = now()
         WHERE id IN (
-          SELECT id FROM jobs
+          SELECT id FROM app.jobs
           WHERE (status = 'pending' AND run_at <= now())
              OR (status = 'running' AND locked_at < now() - make_interval(secs => ${STUCK_AFTER_MS / 1000}))
           ORDER BY run_at

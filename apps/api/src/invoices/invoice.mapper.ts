@@ -37,6 +37,7 @@ export const invoiceSummaryDto = (i: Invoice & { customer?: Customer | null }) =
   vatTotal: num(i.vatTotal),
   irn: i.irn,
   clearedAt: i.clearedAt?.toISOString() ?? null,
+  paidAt: i.paidAt?.toISOString() ?? null,
   createdAt: i.createdAt.toISOString(),
 });
 

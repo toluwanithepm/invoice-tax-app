@@ -26,6 +26,7 @@ export const NRS_ERRORS: Record<string, Omit<PlainError, 'code'>> = {
   'NRS-E110': { field: 'lines', message: 'This credit note is larger than what is left on the original invoice.' },
   'NRS-E111': { field: 'lines.description', message: 'Every line needs a description.' },
   'NRS-E112': { field: 'seller.mbs', message: 'Your business is not connected to the tax authority yet. Finish setup in Settings → MBS connection.' },
+  'NRS-E113': { field: 'receiptNo', message: 'Two sales on the same day have the same receipt number.' },
   'NRS-E201': { field: null, message: 'The tax authority rejected the digital signature. Contact support.' },
   'NRS-E999': { field: null, message: "The tax authority couldn't process this invoice. Try again; if it keeps failing, contact support." },
 };

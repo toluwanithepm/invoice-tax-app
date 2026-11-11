@@ -39,6 +39,9 @@ Browser ──HTTPS──▶ Vercel: Next.js web (apps/web)
 | `sharing` | E3-6 | Share tokens, public view/PDF/logo, events, WhatsApp click-to-chat, email |
 | `platform` | E9-2 | Audit writer, notifications outbox, rate limiter |
 | `jobs` | NFR-4 | Queue, drain endpoint, health, dev tools |
+| `reports` | E7-1, E7-2, E7-3 | Monthly VAT reconciliation vs the filed figure, Excel/PDF exports from the same data, sales/outstanding dashboard, mark paid |
+| `b2c` | E5-1, E5-2, E5-3 | POS upload (CSV/XLSX, day-first dates, VAT-inclusive amounts), daily reports, auto-submit after the day closes, "no sales", retry, deadline alerts |
+| `firms` | E6-1, E6-2, E6-3, E6-4 | Accounting firms, firm-level client access, cross-client dashboard (one SQL function), firm invitations, client connect codes, firm bill |
 
 ## Invoice lifecycle
 
@@ -78,6 +81,25 @@ never leave gaps. Seller and buyer details are frozen into the invoice at submis
 |---|---|---|
 | 0 Foundation | Monorepo, schema, RLS, auth, tenancy, RBAC, audit, jobs, CI | Built |
 | 1 Core slice | E1, E2, E3-1…E3-7, E4, E9-1/E9-2 | Built |
-| 2 Compliance ops | E5 B2C reporting, E6 firm workspace + dashboard, E7 reconciliation/exports | Next |
+| 2 Compliance ops | E5 B2C reporting, E6 firm workspace + dashboard, E7 reconciliation/exports | Built |
 | 3 Monetisation | E10 billing (Paystack/Flutterwave), E9-3 threshold approvals, E8 inbound IRN check | — |
 | 4 Go-live | Real APP adapter + certification, WhatsApp Business API, SMS, load test, pen test, KMS | — |
+
+## B2C daily cycle (E5)
+
+```
+sales uploaded for day D ──▶ report(D) pending ──(00:30 Lagos, D+1)──▶ b2c.submit job ──▶ accepted | rejected | retry every 10 min
+                                                             deadline: 23:59:59 Lagos on D+1
+daily check job at deadline − 6 h ──▶ submits anything waiting ──▶ alerts owners/admins/accountants (email + SMS) if D isn't accepted
+                                    └─▶ schedules the check for D+1 (chain stops when B2C is turned off)
+```
+
+Amounts from POS systems include VAT; `splitGross` works back to net and VAT in kobo so net + VAT always equals what the customer paid.
+WhatsApp alerts (FRD E5-3) use SMS until the WhatsApp Business API provider is added in Phase 4.
+
+## Firm access (E6)
+
+A firm member opens any workspace whose `firm_id` is their firm, with the **accountant** role (direct membership,
+if any, takes precedence). Clients link an existing workspace by entering the firm's 8-character code and can unlink
+at any time; a firm can also create a client workspace and invite the business owner. The cross-client dashboard is a
+single `SECURITY DEFINER` function (`app.firm_dashboard`) that first checks the caller belongs to the firm.

@@ -81,3 +81,14 @@ export function computeTotals(lines: LineInput[]): Totals {
 
 export const formatNaira = (n: number | string) =>
   '₦' + Number(n).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/**
+ * Split a VAT-inclusive (gross) amount, as point-of-sale systems record retail sales (E5).
+ * Exact in kobo: net + vat always equals gross.
+ */
+export function splitGross(gross: number, treatment: VatTreatment): { gross: number; net: number; vat: number } {
+  const grossK = toKobo(gross);
+  const bps = VAT_RATE_BPS[treatment];
+  const netK = Math.round((grossK * 10_000) / (10_000 + bps));
+  return { gross: fromKobo(grossK), net: fromKobo(netK), vat: fromKobo(grossK - netK) };
+}

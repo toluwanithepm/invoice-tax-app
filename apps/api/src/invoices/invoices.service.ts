@@ -52,12 +52,13 @@ export class InvoicesService {
     private readonly audit: AuditService,
   ) {}
 
-  async list(q: { status?: string; q?: string; docType?: string; cursor?: string; limit: number }) {
+  async list(q: { status?: string; q?: string; docType?: string; customerId?: string; cursor?: string; limit: number }) {
     const statuses = q.status?.split(',').filter(Boolean);
     const rows = await this.prisma.scoped().invoice.findMany({
       where: {
         ...(statuses?.length ? { status: { in: statuses } } : {}),
         ...(q.docType ? { docType: q.docType } : {}),
+        ...(q.customerId ? { customerId: q.customerId } : {}),
         ...(q.q
           ? {
               OR: [

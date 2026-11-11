@@ -41,15 +41,23 @@ export class WorkspaceGuard implements CanActivate {
     if (!userId || !UUID_RE.test(workspaceId)) throw notFound('That workspace');
 
     const db = this.prisma.scoped({ workspaceId, userId });
-    const membership = await db.membership.findUnique({
-      where: { workspaceId_userId: { workspaceId, userId } },
-      include: { workspace: { select: { require2fa: true } }, user: { select: { totpEnabledAt: true } } },
-    });
-    if (!membership) throw notFound('That workspace');
-    const role = membership.role as Role;
+    const [membership, workspace, user] = await Promise.all([
+      db.membership.findUnique({ where: { workspaceId_userId: { workspaceId, userId } } }),
+      db.workspace.findUnique({ where: { id: workspaceId }, select: { require2fa: true, firmId: true } }),
+      this.prisma.user.findUnique({ where: { id: userId }, select: { totpEnabledAt: true } }),
+    ]);
+    if (!workspace) throw notFound('That workspace');
 
-    if (membership.workspace.require2fa && requires2fa(role)) {
-      if (!membership.user.totpEnabledAt) {
+    // Direct membership wins; otherwise members of the linked accounting firm act as its accountant (E6-1).
+    let role = (membership?.role as Role | undefined) ?? null;
+    if (!role && workspace.firmId) {
+      const firmMember = await db.firmMember.findUnique({ where: { firmId_userId: { firmId: workspace.firmId, userId } } });
+      if (firmMember) role = 'accountant';
+    }
+    if (!role) throw notFound('That workspace');
+
+    if (workspace.require2fa && requires2fa(role)) {
+      if (!user?.totpEnabledAt) {
         throw forbidden('This workspace requires two-step verification. Turn it on in your security settings.', 'TWO_FACTOR_SETUP_REQUIRED');
       }
       if (!ctx().mfaVerified) throw forbidden('Enter your authenticator code to continue.', 'MFA_REQUIRED');

@@ -33,6 +33,12 @@ import { SharingService } from './sharing/sharing.service';
 import { PublicInvoicesController } from './sharing/public.controller';
 import { JobsService } from './jobs/jobs.service';
 import { DevController, HealthController, InternalJobsController } from './jobs/internal.controller';
+import { ReportsService } from './reports/reports.service';
+import { InvoicePaymentsController, ReportsController } from './reports/reports.controller';
+import { B2cService } from './b2c/b2c.service';
+import { B2cController, B2cTemplateController } from './b2c/b2c.controller';
+import { FirmsService } from './firms/firms.service';
+import { FirmInvitationsController, FirmsController, WorkspaceFirmController } from './firms/firms.controller';
 
 /** Wraps each request in an AsyncLocalStorage context (request id, IP) used by logging, audit and RLS. */
 function contextMiddleware(req: Request, res: Response, next: NextFunction) {
@@ -87,6 +93,13 @@ class PlatformModule {}
     ImportsController,
     ImportTemplatesController,
     InvoicesController,
+    InvoicePaymentsController,
+    ReportsController,
+    B2cController,
+    B2cTemplateController,
+    FirmsController,
+    FirmInvitationsController,
+    WorkspaceFirmController,
     PublicInvoicesController,
     InternalJobsController,
     HealthController,
@@ -112,6 +125,9 @@ class PlatformModule {}
     ClearanceService,
     PdfService,
     SharingService,
+    ReportsService,
+    B2cService,
+    FirmsService,
   ],
 })
 export class AppModule implements NestModule {

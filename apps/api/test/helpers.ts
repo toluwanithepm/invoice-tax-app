@@ -10,7 +10,7 @@ export const ORIGIN = 'http://localhost:3000';
 
 export async function createTestApp() {
   const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
-  const app = mod.createNestApplication<NestExpressApplication>({ bodyParser: false, logger: false });
+  const app = mod.createNestApplication<NestExpressApplication>({ bodyParser: false, logger: process.env.TEST_LOGS ? ['error', 'warn'] : false });
   configureApp(app);
   await app.init();
   return app;

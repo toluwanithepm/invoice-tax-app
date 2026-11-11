@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { createHash, createHmac } from 'crypto';
-import { isValidTin } from '@einv/shared';
+import { isValidTin, lagosToday } from '@einv/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   AccessPointProvider,
+  B2cReportRequest,
+  B2cReportResult,
   ClearanceRequest,
   ClearanceResult,
   ProviderUnavailableError,
@@ -26,6 +28,20 @@ export function mbsRules(r: ClearanceRequest): string[] {
   if (net + vat !== kobo(r.totals.total) || vat !== kobo(r.totals.vatTotal)) errs.add('NRS-E106');
   if (r.issueDate > new Date().toISOString().slice(0, 10)) errs.add('NRS-E107');
   if (r.docType !== 'invoice' && !r.original?.irn) errs.add('NRS-E108');
+  return [...errs];
+}
+
+/** Rules MBS applies to a daily B2C batch. */
+export function b2cRules(r: B2cReportRequest): string[] {
+  const errs = new Set<string>();
+  if (!isValidTin(r.sellerTin)) errs.add('NRS-E101');
+  if (r.salesDate > lagosToday()) errs.add('NRS-E107');
+  if (!r.noSales && r.rows.length === 0) errs.add('NRS-E104');
+  const k = (n: number) => Math.round(n * 100);
+  if (r.rows.some((x) => k(x.net) + k(x.vat) !== k(x.gross))) errs.add('NRS-E106');
+  const sum = (f: (x: B2cReportRequest['rows'][number]) => number) => r.rows.reduce((s, x) => s + k(f(x)), 0);
+  if (sum((x) => x.gross) !== k(r.totals.gross) || sum((x) => x.vat) !== k(r.totals.vat)) errs.add('NRS-E106');
+  if (new Set(r.rows.map((x) => x.receiptNo)).size !== r.rows.length) errs.add('NRS-E113');
   return [...errs];
 }
 
@@ -74,6 +90,28 @@ export class MockAccessPoint implements AccessPointProvider {
       },
     });
     return { status: 'cleared', irn, qrPayload: this.qr(irn, r) };
+  }
+
+  async reportB2C(r: B2cReportRequest): Promise<B2cReportResult> {
+    this.checkUp();
+    const prior = await this.prisma.mockMbsDocument.findUnique({ where: { idempotencyKey: r.idempotencyKey } });
+    if (prior) return { status: 'accepted', reference: prior.irn, duplicate: true };
+    const errors = MockAccessPoint.forceErrors ?? b2cRules(r);
+    if (errors.length) return { status: 'rejected', errors };
+    const reference = `B2C-${this.serviceId(r.sellerTin)}-${r.salesDate.replace(/-/g, '')}-${r.idempotencyKey.slice(-6).toUpperCase()}`;
+    await this.prisma.mockMbsDocument.create({
+      data: {
+        irn: reference,
+        idempotencyKey: r.idempotencyKey,
+        sellerTin: r.sellerTin,
+        buyerTin: null,
+        docType: 'b2c_daily',
+        total: r.totals.gross,
+        issueDate: r.salesDate,
+        sandbox: false,
+      },
+    });
+    return { status: 'accepted', reference };
   }
 
   async lookupIrn(irn: string) {
