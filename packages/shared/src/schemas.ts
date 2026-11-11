@@ -14,7 +14,7 @@ const optionalText = (max = 500) =>
     .nullable()
     .transform((v) => (v ? v : null));
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use the format YYYY-MM-DD.');
-const money = z.coerce.number({ invalid_type_error: 'Enter an amount.' }).min(0, 'Amount cannot be negative.').max(1e12);
+const money = z.coerce.number({ error: 'Enter an amount.' }).min(0, 'Amount cannot be negative.').max(1e12);
 const tin = z
   .string()
   .transform(normaliseTin)
@@ -113,7 +113,7 @@ export const productSchema = z.object({
   name: trimmed(200).min(1, 'Enter a name.'),
   description: optionalText(500),
   unitPrice: money,
-  vatTreatment: z.enum(VAT_TREATMENTS, { errorMap: () => ({ message: 'Choose a VAT treatment.' }) }),
+  vatTreatment: z.enum(VAT_TREATMENTS, { error: 'Choose a VAT treatment.' }),
   sku: optionalText(64),
 });
 export type ProductInput = z.infer<typeof productSchema>;

@@ -79,3 +79,11 @@ describe('validation and messages', () => {
     expect(taxBand(null)).toBeNull();
   });
 });
+
+describe('plain-language zod defaults', () => {
+  it('says a missing field is required instead of a type error', () => {
+    const r = customerSchema.safeParse({ tin: '12345678-0001' });
+    expect(r.success).toBe(false);
+    expect(r.error!.issues.find((i) => i.path[0] === 'name')!.message).toBe('This field is required.');
+  });
+});

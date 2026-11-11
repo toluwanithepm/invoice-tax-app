@@ -1,3 +1,4 @@
+import './zod-config';
 export * from './vat';
 export * from './roles';
 export * from './nrs';
