@@ -18,7 +18,7 @@ import {
 } from '@einv/shared';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
-import { Checkbox } from '@/components/ui/form';
+import { Checkbox, Input } from '@/components/ui/form';
 import { Alert, Badge, Card, CardBody, CardHeader, PageHeader, Progress, Skeleton, Spinner } from '@/components/ui/layout';
 import { api, errorMessage } from '@/lib/api';
 import { useBilling, useRole, useWsId } from '@/lib/hooks';
@@ -314,6 +314,58 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
   );
 }
 
+function BillingEmail({ b, canManage }: { b: BillingSummary; canManage: boolean }) {
+  const ws = useWsId();
+  const qc = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(b.billingEmail ?? '');
+  const [busy, setBusy] = useState(false);
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      qc.setQueryData(['billing', ws], await api.patch<BillingSummary>(`/v1/workspaces/${ws}/billing`, { billingEmail: value }));
+      toast.success('Billing email saved');
+      setEditing(false);
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (editing) {
+    return (
+      <form onSubmit={save} className="space-y-2">
+        <label htmlFor="billing-email" className="text-sm font-medium">
+          Billing email
+        </label>
+        <Input id="billing-email" type="email" value={value} onChange={(e) => setValue(e.target.value)} placeholder="accounts@business.ng" autoFocus />
+        <div className="flex gap-2">
+          <Button type="submit" size="sm" loading={busy} disabled={!value.includes('@')}>
+            Save
+          </Button>
+          <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(false)}>
+            Cancel
+          </Button>
+        </div>
+      </form>
+    );
+  }
+  return (
+    <div className="flex items-start justify-between gap-3 text-sm">
+      <div className="min-w-0">
+        <p className="text-muted">Receipts and payment emails go to</p>
+        <p className="truncate font-medium">{b.billingEmail ?? 'the person who pays'}</p>
+      </div>
+      {canManage && (
+        <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
+          Edit
+        </Button>
+      )}
+    </div>
+  );
+}
+
 function Payments({ b, canManage }: { b: BillingSummary; canManage: boolean }) {
   const ws = useWsId();
   const qc = useQueryClient();
@@ -346,6 +398,7 @@ function Payments({ b, canManage }: { b: BillingSummary; canManage: boolean }) {
               <span className="text-muted">No saved card. Pay by card to save one for renewals.</span>
             )}
           </div>
+          <BillingEmail b={b} canManage={canManage} />
           {canManage && b.plan !== 'trial' && (
             <Checkbox
               checked={b.autoRenew}

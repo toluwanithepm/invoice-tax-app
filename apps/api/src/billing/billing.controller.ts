@@ -21,6 +21,7 @@ import {
   billingSettingsSchema,
   checkoutSchema,
   paymentReferenceSchema,
+  type BillingSettings,
   type CheckoutInput,
 } from '@einv/shared';
 import { Public, RateLimit, RequirePermission, SkipCsrf } from '../common/decorators';
@@ -76,8 +77,8 @@ export class BillingController {
 
   @Patch()
   @RequirePermission('billing.manage')
-  settings(@Body(new ZodPipe(billingSettingsSchema)) body: { autoRenew: boolean }) {
-    return this.billing.setAutoRenew(body.autoRenew);
+  settings(@Body(new ZodPipe(billingSettingsSchema)) body: BillingSettings) {
+    return this.billing.updateSettings(body);
   }
 
   @Delete('scheduled-change')

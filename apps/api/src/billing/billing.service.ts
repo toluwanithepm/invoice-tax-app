@@ -129,6 +129,7 @@ export class BillingService implements OnModuleInit {
       currentPeriodEnd: ws.currentPeriodEnd?.toISOString() ?? null,
       graceEndsAt: graceEndsAt?.toISOString() ?? null,
       autoRenew: ws.autoRenew,
+      billingEmail: ws.billingEmail,
       nextPlan: ws.nextPlan,
       nextInterval: ws.nextInterval,
       card: ws.cardLast4 ? { last4: ws.cardLast4, brand: ws.cardBrand, expiry: ws.cardExpiry } : null,
@@ -229,13 +230,31 @@ export class BillingService implements OnModuleInit {
     });
     if (!ws.billingEmail)
       await this.prisma.scoped().workspace.update({ where: { id: ws.id }, data: { billingEmail: email } });
-    const { authorizationUrl } = await this.provider.initialize({
-      email,
-      amountKobo: amount,
-      reference,
-      callbackUrl: `${env().PUBLIC_APP_URL}/w/${ws.id}/billing`,
-      metadata: { workspace_id: ws.id, plan: target.plan, interval: target.interval },
-    });
+    let authorizationUrl: string;
+    try {
+      ({ authorizationUrl } = await this.provider.initialize({
+        email,
+        amountKobo: amount,
+        reference,
+        callbackUrl: `${env().PUBLIC_APP_URL}/w/${ws.id}/billing`,
+        metadata: { workspace_id: ws.id, plan: target.plan, interval: target.interval },
+      }));
+    } catch (err) {
+      const message = (err as Error).message ?? '';
+      this.log.warn({ err, reference }, 'Payment gateway refused checkout');
+      await this.prisma.scoped().payment.updateMany({
+        where: { reference, status: 'pending' },
+        data: { status: 'abandoned', failureReason: message.slice(0, 300) },
+      });
+      if (/email/i.test(message)) {
+        throw badRequest(
+          `The payment provider didn't accept ${email} as an email address. Change the billing email on this page and try again.`,
+          [{ field: 'billingEmail', message: 'Use a working email address.' }],
+          'BILLING_EMAIL_REJECTED',
+        );
+      }
+      throw new AppError(502, 'PAYMENT_GATEWAY_ERROR', "We couldn't reach the payment provider. You haven't been charged. Try again in a few minutes.");
+    }
     await this.audit.record({
       entity: 'payment',
       entityId: reference,
@@ -254,14 +273,19 @@ export class BillingService implements OnModuleInit {
     return this.summary();
   }
 
-  async setAutoRenew(autoRenew: boolean) {
+  async updateSettings(input: { autoRenew?: boolean; billingEmail?: string }) {
     const ws = await this.workspace();
-    await this.prisma.scoped().workspace.update({ where: { id: ws.id }, data: { autoRenew } });
-    await this.audit.record({
-      entity: 'workspace',
-      entityId: ws.id,
-      action: autoRenew ? 'billing.auto_renew_on' : 'billing.auto_renew_off',
-    });
+    await this.prisma.scoped().workspace.update({ where: { id: ws.id }, data: input });
+    if (input.autoRenew !== undefined) {
+      await this.audit.record({
+        entity: 'workspace',
+        entityId: ws.id,
+        action: input.autoRenew ? 'billing.auto_renew_on' : 'billing.auto_renew_off',
+      });
+    }
+    if (input.billingEmail !== undefined) {
+      await this.audit.record({ entity: 'workspace', entityId: ws.id, action: 'billing.email_changed' });
+    }
     return this.summary();
   }
 
@@ -495,7 +519,9 @@ export class BillingService implements OnModuleInit {
 
   // ── Helpers ───────────────────────────────────────────────────────────
 
+  /** The business's billing email first (e.g. accounts@), then the person paying, then the business email. */
   private async payerEmail(ws: Workspace): Promise<string> {
+    if (ws.billingEmail) return ws.billingEmail;
     const userId = ctx().userId;
     if (userId) {
       const u = await this.prisma.user.findUnique({ where: { id: userId }, select: { email: true } });

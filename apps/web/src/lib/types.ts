@@ -149,6 +149,7 @@ export interface BillingSummary {
   currentPeriodEnd: string | null;
   graceEndsAt: string | null;
   autoRenew: boolean;
+  billingEmail: string | null;
   nextPlan: 'starter' | 'business' | 'pro' | null;
   nextInterval: 'monthly' | 'yearly' | null;
   card: { last4: string; brand: string | null; expiry: string | null } | null;

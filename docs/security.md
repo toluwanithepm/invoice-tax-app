@@ -113,6 +113,29 @@ via PITR restore to a new project + DNS switch. A daily restore test runs agains
   production shows plans but takes no payment.
 - `/v1/public/irn` is rate-limited per IP and returns only what is printed on the invoice itself.
 
+## 8b. Automated attack tests
+
+`apps/api/test/security.e2e.spec.ts` attacks the real API and Postgres (with RLS) on every test run
+(28 tests). What it proves:
+
+| Area | Attacks tried | Expected and observed |
+|---|---|---|
+| Brute force and rate limits | 7 sign-in code requests for one email from rotating IPs; 32 requests for different emails from one IP; 5 wrong codes then the right one; 32 IRN checks; 121 guessed share links | 429 after 5 per email and 30 per IP; code locked after 5 wrong guesses; 429 after 30 IRN checks and 120 link guesses; other visitors unaffected |
+| SQL injection | Six payloads (`' OR '1'='1`, `DROP TABLE`, `UNION SELECT`, `pg_sleep`, URL-encoded, stacked `UPDATE`) in invoice, customer and IRN searches, record names and path parameters | Treated as text; no rows leaked; tables intact; bad IDs refused before the database |
+| Other injection | Operator objects (`{"contains": ""}`), `__proto__` / `constructor.prototype` keys, `<script>` in names, negative, huge and NaN amounts | 400 validation errors; no prototype pollution; scripts stored and returned as JSON text |
+| Broken access control | Another business's workspace, invoices, PDFs, customers, billing, receipts, audit log and VAT report, by URL and through the attacker's own workspace; edits, deletes and checkout on someone else's workspace; a viewer promoting themselves, inviting owners, changing settings or submitting invoices | 401 without a session or with a forged cookie; 403/404 everywhere else; no data in error bodies |
+| Mass assignment | Sending `plan`, `currentPeriodEnd`, `trialEndsAt` in settings and billing updates | Ignored: plan and dates unchanged |
+| CSRF | Other-site Origin, look-alike Origin, no Origin, missing or wrong CSRF token | 403 every time; nothing written |
+| Payment forgery | Unsigned, wrongly signed and altered webhooks; a correctly signed webhook for an unpaid checkout; three concurrent replays plus a late one; unknown and malicious references | 401 for bad signatures; no plan change without the gateway confirming; exactly one settled payment; junk references ignored |
+| Malformed input | Broken JSON, a 1.2 MB body, XML, 5,000-level nested JSON | 400, 413 and 4xx responses; no crashes |
+| Headers and cookies | Response headers; session cookie; error bodies | HSTS, nosniff, `frame-ancestors 'none'`, no `X-Powered-By`, no CORS; session cookie HttpOnly and SameSite=Lax (Secure in production); no stack traces or SQL in errors |
+
+**Found and fixed while writing it:** a request body over the 1 MB limit returned a 500 error
+instead of 413. The size limit already held; the error response now reports it correctly.
+
+These tests check the app's own defences. They don't replace the external penetration test planned
+for Phase 4 (edge and network, Vercel and Supabase configuration, business-logic review by a human).
+
 ## 9. Known gaps (tracked)
 
 - Real APP integration, NRS/NITDA certification and signing-key custody (Phase 4).

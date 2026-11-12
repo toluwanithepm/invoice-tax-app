@@ -211,5 +211,8 @@ export const checkoutSchema = z.object({
   interval: z.enum(['monthly', 'yearly']),
 });
 export type CheckoutInput = z.infer<typeof checkoutSchema>;
-export const billingSettingsSchema = z.object({ autoRenew: z.boolean() });
+export const billingSettingsSchema = z
+  .object({ autoRenew: z.boolean().optional(), billingEmail: emailSchema.optional() })
+  .refine((v) => v.autoRenew !== undefined || v.billingEmail !== undefined, 'Nothing to change.');
+export type BillingSettings = z.infer<typeof billingSettingsSchema>;
 export const paymentReferenceSchema = z.object({ reference: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/) });

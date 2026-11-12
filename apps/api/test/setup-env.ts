@@ -17,3 +17,6 @@ process.env.JOBS_INPROCESS = 'false';
 process.env.OTP_DEV_ECHO = 'false';
 process.env.EMAIL_PROVIDER = 'console';
 process.env.SMS_PROVIDER = 'console';
+// Tests never call real payment, email or SMS providers, whatever .env says.
+process.env.PAYMENT_PROVIDER = 'mock';
+delete process.env.PAYSTACK_SECRET_KEY;

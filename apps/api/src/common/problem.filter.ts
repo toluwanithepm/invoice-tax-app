@@ -48,6 +48,18 @@ export class ProblemFilter implements ExceptionFilter {
         status === 404 ? 'That page or record was not found.' : status === 413 ? 'That file is too large.' : e.message;
       return { ...base, status, code: HttpStatus[status] ?? 'HTTP_ERROR', title: HttpStatus[status] ?? 'Error', detail };
     }
+    // Errors raised by the body parser before any route runs (too large, unreadable, wrong encoding).
+    const parser = e as { type?: unknown; status?: unknown; statusCode?: unknown; expose?: unknown } | null;
+    const parserStatus = Number(parser?.status ?? parser?.statusCode);
+    if (parser && typeof parser.type === 'string' && parser.expose === true && parserStatus >= 400 && parserStatus < 500) {
+      const detail =
+        parserStatus === 413
+          ? 'That request is too large.'
+          : parserStatus === 415
+            ? 'That kind of content is not supported.'
+            : "We couldn't read that request. Check it and try again.";
+      return { ...base, status: parserStatus, code: HttpStatus[parserStatus] ?? 'BAD_REQUEST', title: HttpStatus[parserStatus] ?? 'Error', detail };
+    }
     if (e instanceof Prisma.PrismaClientKnownRequestError) {
       if (e.code === 'P2002')
         return { ...base, status: 409, code: 'DUPLICATE', title: 'Conflict', detail: 'A record with these details already exists.' };
