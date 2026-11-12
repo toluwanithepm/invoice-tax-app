@@ -24,6 +24,7 @@ const TABS = [
   { key: 'security', label: 'Security' },
 ] as const;
 const LINKS = [
+  { href: 'billing', label: 'Plan & billing' },
   { href: 'audit', label: 'Activity log' },
   { href: 'import', label: 'Import data' },
 ];
@@ -39,7 +40,7 @@ function Settings() {
   return (
     <>
       <PageHeader title="Settings" />
-      <div role="tablist" aria-label="Settings sections" className="mb-6 flex gap-1 overflow-x-auto border-b border-line">
+      <div role="tablist" aria-label="Settings sections" className="mb-6 flex gap-1 overflow-x-auto overflow-y-hidden border-b border-line">
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -340,6 +341,65 @@ function InviteDialog({ onClose, onDone }: { onClose: () => void; onDone: () => 
   );
 }
 
+/** E9-3: invoices at or above this amount need a second person's approval. Business and Pro (and the trial). */
+function ThresholdSetting({ ws, onSave }: { ws: Workspace; onSave: (v: number | null) => Promise<void> }) {
+  const wsId = useWsId();
+  const [on, setOn] = useState(ws.approvalThreshold !== null);
+  const [amount, setAmount] = useState(ws.approvalThreshold?.toString() ?? '');
+  const allowed = ws.plan === 'trial' || ws.plan === 'business' || ws.plan === 'pro';
+  const value = Number(amount.replace(/,/g, ''));
+  const valid = amount.trim() !== '' && Number.isFinite(value) && value > 0;
+  return (
+    <div className="space-y-3">
+      <Checkbox
+        checked={on}
+        disabled={!allowed && !on}
+        onChange={(e) => {
+          setOn(e.target.checked);
+          if (!e.target.checked && ws.approvalThreshold !== null) void onSave(null);
+        }}
+        label={
+          <>
+            <span className="font-medium">Ask a second person to approve large invoices</span>
+            <span className="block text-xs text-muted">
+              Invoices at or above the amount wait for another owner or approver, even when an owner creates them.
+              {!allowed && (
+                <>
+                  {' '}
+                  Available on Business and Pro.{' '}
+                  <Link href={`/w/${wsId}/billing`} className="font-medium text-brand-700 underline-offset-4 hover:underline">
+                    See plans
+                  </Link>
+                </>
+              )}
+            </span>
+          </>
+        }
+      />
+      {on && (
+        <form
+          className="ml-[30px] flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (valid) void onSave(value);
+          }}
+        >
+          <label htmlFor="threshold" className="sr-only">
+            Approval amount in naira
+          </label>
+          <div className="relative w-44">
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-subtle">₦</span>
+            <Input id="threshold" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="500,000" className="tabular pl-7" />
+          </div>
+          <Button type="submit" variant="secondary" disabled={!valid || value === ws.approvalThreshold}>
+            Save
+          </Button>
+        </form>
+      )}
+    </div>
+  );
+}
+
 function SecurityTab({ ws, canManage }: { ws: Workspace; canManage: boolean }) {
   const qc = useQueryClient();
   const router = useRouter();
@@ -388,6 +448,7 @@ function SecurityTab({ ws, canManage }: { ws: Workspace; canManage: boolean }) {
                 </>
               }
             />
+            <ThresholdSetting ws={ws} onSave={(approvalThreshold) => patch({ approvalThreshold })} />
             <Checkbox
               checked={ws.require2fa}
               onChange={(e) => patch({ require2fa: e.target.checked })}

@@ -62,6 +62,7 @@ export function invoiceDto(i: InvoiceWithRelations) {
     qrPayload: i.qrPayload,
     errors: (i.lastErrors as unknown[]) ?? [],
     attempts: i.attempts,
+    submittedBy: i.submittedBy,
     nextAttemptAt: i.nextAttemptAt?.toISOString() ?? null,
     history: (i.attemptsLog ?? [])
       .sort((a, b) => a.attempt - b.attempt)

@@ -13,7 +13,7 @@ import { Field, Input, Label, Select, Textarea } from '@/components/ui/form';
 import { Alert, Card, CardBody, CardHeader, Steps } from '@/components/ui/layout';
 import { InfoTip, Term } from '@/components/ui/help';
 import { JOURNEY } from '@/components/status';
-import { api, ApiError, errorMessage } from '@/lib/api';
+import { api, ApiError, errorMessage, planBlockToast } from '@/lib/api';
 import { useRole, useWorkspace, useWsId } from '@/lib/hooks';
 import type { Customer, Invoice, Page, PlainError, Product } from '@/lib/types';
 import { cn, naira, todayIso } from '@/lib/utils';
@@ -190,6 +190,7 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
       // so a client-side replace to that same URL is a no-op: load the invoice page for real.
       if (!invoice) window.location.replace(`/w/${ws}/invoices/${savedId}`);
     } catch (err) {
+      if (planBlockToast(err, ws, toast.error)) return;
       if (err instanceof ApiError && err.errors.length) {
         setProblems(err.errors);
         toast.error(err.detail);

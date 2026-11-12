@@ -28,6 +28,10 @@ const EnvSchema = z.object({
   EMAIL_FROM: z.string().default('E-Invoice <no-reply@example.com>'),
   TERMII_API_KEY: z.string().optional(),
   TERMII_SENDER_ID: z.string().optional(),
+  WHATSAPP_PROVIDER: z.enum(['console']).default('console'),
+  /** E10-2 payment gateway. `mock` gives a built-in test checkout and is refused in production. */
+  PAYMENT_PROVIDER: z.enum(['mock', 'paystack']).default('mock'),
+  PAYSTACK_SECRET_KEY: z.string().regex(/^sk_(test|live)_/, 'must be a Paystack secret key (sk_test_… or sk_live_…)').optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -46,6 +50,11 @@ export function env(): Env {
   if (e.NODE_ENV === 'production' && e.OTP_DEV_ECHO) throw new Error('OTP_DEV_ECHO must be off in production');
   if (e.NODE_ENV === 'production' && (e.EMAIL_PROVIDER === 'console' || e.SMS_PROVIDER === 'console')) {
     throw new Error('Console notification providers are not allowed in production');
+  }
+  if (e.PAYMENT_PROVIDER === 'paystack' && !e.PAYSTACK_SECRET_KEY) throw new Error('PAYSTACK_SECRET_KEY is required when PAYMENT_PROVIDER=paystack');
+  if (e.NODE_ENV === 'production' && e.PAYMENT_PROVIDER === 'mock') {
+    // Fail closed: production without a gateway can show plans but cannot take (or fake) payments.
+    console.warn('PAYMENT_PROVIDER=mock in production: checkout is disabled until Paystack is configured.');
   }
   cached = e;
   return e;

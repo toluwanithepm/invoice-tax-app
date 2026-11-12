@@ -165,8 +165,19 @@ model Workspace {
   require2fa          Boolean      @default(false) @map("require_2fa")
   b2cEnabled          Boolean      @default(false) @map("b2c_enabled")
   firmLinkedAt        DateTime?    @map("firm_linked_at") @db.Timestamptz(3)
-  plan                String       @default("trial")
+  plan                String       @default("trial") // trial | starter | business | pro
   trialEndsAt         DateTime?    @map("trial_ends_at") @db.Timestamptz(3)
+  billingInterval     String?      @map("billing_interval") // monthly | yearly
+  currentPeriodEnd    DateTime?    @map("current_period_end") @db.Timestamptz(3)
+  autoRenew           Boolean      @default(true) @map("auto_renew")
+  nextPlan            String?      @map("next_plan") // downgrade scheduled for renewal
+  nextInterval        String?      @map("next_interval")
+  billingEmail        String?      @map("billing_email")
+  cardAuthEnc         String?      @map("card_auth_enc") // AES-256-GCM Paystack authorization code
+  cardLast4           String?      @map("card_last4")
+  cardBrand           String?      @map("card_brand")
+  cardExpiry          String?      @map("card_expiry") // MM/YY
+  approvalThreshold   Decimal?     @map("approval_threshold") @db.Decimal(18, 2)
   createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
   memberships         Membership[]
@@ -176,6 +187,7 @@ model Workspace {
   invoices            Invoice[]
   b2cReports          B2cReport[]
   vatDeclarations     VatDeclaration[]
+  payments            Payment[]
 
   @@index([firmId])
   @@map("workspaces")
@@ -521,4 +533,31 @@ model MockMbsDocument {
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@map("mock_mbs_documents")
+}
+
+/// E10-2: one attempt to pay for a plan period (checkout or automatic renewal).
+model Payment {
+  id            String    @id @db.Uuid
+  workspaceId   String    @map("workspace_id") @db.Uuid
+  workspace     Workspace @relation(fields: [workspaceId], references: [id])
+  reference     String    @unique
+  kind          String // checkout | renewal
+  plan          String
+  interval      String
+  amount        Int // kobo actually charged
+  listPrice     Int       @map("list_price") // kobo
+  credit        Int       @default(0) // kobo of proration credit applied
+  status        String    @default("pending") // pending | success | failed | abandoned
+  channel       String?
+  failureReason String?   @map("failure_reason")
+  periodStart   DateTime? @map("period_start") @db.Timestamptz(3)
+  periodEnd     DateTime? @map("period_end") @db.Timestamptz(3)
+  paidAt        DateTime? @map("paid_at") @db.Timestamptz(3)
+  receiptNumber String?   @unique @map("receipt_number")
+  createdBy     String?   @map("created_by") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([workspaceId, createdAt])
+  @@map("payments")
 }

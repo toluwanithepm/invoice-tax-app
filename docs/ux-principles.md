@@ -81,3 +81,16 @@ changing what any screen does.
 | Invoice filters use the same words as status badges (Needs approval, With NRS, Approved, Needs fixing) | Consistency (Jakob's law): one name for one thing |
 | VAT table rows in plain words; empty rows shown as “—” in muted text; VAT-treatment breakdown as tidy aligned rows | Draws the eye to numbers that matter; zero rows stop looking like data |
 | Settings firm code: input and button on one line, hint underneath | Removes a layout hack; the form reads left to right as one action |
+
+## Plans and billing (Phase 3)
+
+| Decision | Why |
+|---|---|
+| Three plans, one highlighted as “Most popular” | Hick's law (few choices) and the Von Restorff effect (one stands out) |
+| Monthly/yearly switch shows “2 months free” | Makes the saving concrete instead of a percentage |
+| A preview before any payment: price, credit for unused days, amount today, renewal date | No surprises at the payment page; builds trust (Nielsen: visibility of system status) |
+| Downgrades say “nothing to pay today” and wait for renewal | People keep what they paid for; reversible with “Keep current plan” |
+| One plan banner at a time, only when action is needed (trial ending, 80% used, payment due, paused) | Avoids banner blindness; urgency ordered by impact |
+| When sending pauses, the message says what still works (drafts, approved invoices) and links to the fix | Error messages that explain and recover (Nielsen #9) |
+| Invoices waiting for a second approver say why, and hide “Approve” from the person who sent it | Prevents a dead-end click (error prevention) |
+| `/verify` accepts typed IRNs or a camera scan, and explains “not found” in plain words | Postel's law: accept the input people have |

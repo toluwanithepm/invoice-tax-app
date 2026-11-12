@@ -99,6 +99,20 @@ Supabase Pro with Point-in-Time Recovery gives RPO ≤ 15 min (WAL archiving eve
 via PITR restore to a new project + DNS switch. A daily restore test runs against a scratch project
 (runbook: `docs/runbooks/restore.md`, to be written in Phase 4).
 
+## 8a. Payments (E10)
+
+- Card details never touch this app: payers use Paystack's hosted page. Only Paystack's reusable
+  authorization code is stored, encrypted (AES-256-GCM) like bank details, with last 4 digits and expiry.
+- Webhooks are verified with HMAC-SHA512 over the raw request body (`x-paystack-signature`), then the
+  result is fetched from Paystack itself; the webhook body's amount is ignored.
+- Amount and currency must match the pending payment exactly or the payment is marked failed and logged.
+- A settled payment row can't be changed (trigger), and only the call that moves it out of `pending`
+  applies a plan, so retries and duplicate webhooks are harmless.
+- Only owners and admins can pay or change the plan; owners, admins and accountants can see receipts.
+- The mock gateway and its test checkout are refused in production; without Paystack configured,
+  production shows plans but takes no payment.
+- `/v1/public/irn` is rate-limited per IP and returns only what is printed on the invoice itself.
+
 ## 9. Known gaps (tracked)
 
 - Real APP integration, NRS/NITDA certification and signing-key custody (Phase 4).

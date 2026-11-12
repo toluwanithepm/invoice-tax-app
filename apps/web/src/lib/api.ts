@@ -66,7 +66,7 @@ function safeJson(text: string) {
   }
 }
 
-const PUBLIC_PATHS = ['/login', '/signup', '/i/', '/2fa', '/help'];
+const PUBLIC_PATHS = ['/login', '/signup', '/i/', '/2fa', '/help', '/verify', '/billing/test-checkout'];
 function handleAuthRedirects(err: ApiError) {
   if (typeof window === 'undefined') return;
   const here = window.location.pathname;
@@ -105,3 +105,13 @@ export function applyFieldErrors(
 }
 
 export const errorMessage = (err: unknown) => (err instanceof ApiError ? err.detail : 'Something went wrong. Check your connection and try again.');
+
+/**
+ * E10: a 402 means sending is paused by the plan (trial ended, limit reached, payment lapsed).
+ * Shows the reason with a way to fix it; returns true when it handled the error.
+ */
+export function planBlockToast(err: unknown, workspaceId: string, toastFn: (msg: string, opts: { action: { label: string; onClick: () => void }; duration: number }) => unknown) {
+  if (!(err instanceof ApiError) || err.status !== 402) return false;
+  toastFn(err.detail, { action: { label: 'See plans', onClick: () => window.location.assign(`/w/${workspaceId}/billing`) }, duration: 10_000 });
+  return true;
+}

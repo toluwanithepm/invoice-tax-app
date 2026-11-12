@@ -82,7 +82,7 @@ never leave gaps. Seller and buyer details are frozen into the invoice at submis
 | 0 Foundation | Monorepo, schema, RLS, auth, tenancy, RBAC, audit, jobs, CI | Built |
 | 1 Core slice | E1, E2, E3-1…E3-7, E4, E9-1/E9-2 | Built |
 | 2 Compliance ops | E5 B2C reporting, E6 firm workspace + dashboard, E7 reconciliation/exports | Built |
-| 3 Monetisation | E10 billing (Paystack/Flutterwave), E9-3 threshold approvals, E8 inbound IRN check | — |
+| 3 Monetisation | E10 plans and Paystack billing, E9-3 approval above an amount, E8-1 IRN check | Built |
 | 4 Go-live | Real APP adapter + certification, WhatsApp Business API, SMS, load test, pen test, KMS | — |
 
 ## B2C daily cycle (E5)
@@ -103,3 +103,38 @@ A firm member opens any workspace whose `firm_id` is their firm, with the **acco
 if any, takes precedence). Clients link an existing workspace by entering the firm's 8-character code and can unlink
 at any time; a firm can also create a client workspace and invite the business owner. The cross-client dashboard is a
 single `SECURITY DEFINER` function (`app.firm_dashboard`) that first checks the caller belongs to the firm.
+
+## Plans and billing (E10)
+
+- **Status is derived, not scheduled.** `planState()` in `packages/shared/src/billing.ts` works out
+  `trialing → trial_ended` and `active → past_due (7 days) → lapsed` from `trial_ends_at` and
+  `current_period_end`. Nothing has to run on time for a trial to end or a plan to lapse.
+- **Enforcement** happens in one place: `BillingService.assertCanSend()` runs before anything is sent to
+  NRS (`ClearanceService.startClearance`). It returns HTTP 402 with a plain reason. Drafts, approvals,
+  sharing, PDFs and reports are never blocked.
+- **Usage** counts invoices (not notes) cleared this Lagos calendar month plus any in flight, so quick
+  repeated clicks can't overshoot the limit. During the trial it counts from the workspace's creation.
+- **Checkout** (`POST …/billing/checkout`) creates a `pending` payment and returns the gateway's hosted
+  page (card, bank transfer, USSD). Upgrades start now and credit unused days at list price; cheaper
+  choices are stored as `next_plan` and applied at renewal.
+- **Settlement** (`BillingService.settle`) is the only code that changes a plan. It always asks the gateway
+  for the result (never trusts a webhook body), checks amount and currency, and moves the payment out of
+  `pending` with a guarded update, so the return page, the webhook and a renewal can race safely.
+  Settled payments are locked by a database trigger.
+- **Renewals** are `billing.renew` jobs queued for the period end. With a saved card they charge it; on
+  failure they retry daily until the grace period ends, emailing owners on the first and last attempt.
+- **Gateway seam**: `PaymentProvider` with `PaystackProvider` and `MockPaymentProvider`. The mock's
+  test checkout page (`/billing/test-checkout`) only works outside production.
+
+## IRN check (E8-1)
+
+`GET /v1/public/irn?q=` accepts an IRN or the text inside an invoice QR code and asks MBS
+(`AccessPointProvider.lookupIrn`). Sandbox IRNs are reported as not valid. The public page is `/verify`;
+it can scan a QR code with the camera where the browser supports `BarcodeDetector` (camera is allowed
+on that page only).
+
+## Approval above an amount (E9-3)
+
+`workspaces.approval_threshold` (Business, Pro and the trial). At or above it, any submit goes to
+`pending_approval`, approvers other than the submitter are emailed and sent a WhatsApp message, and
+the person who sent it can't approve it (`SECOND_APPROVER_REQUIRED`).

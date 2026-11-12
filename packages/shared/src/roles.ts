@@ -25,6 +25,8 @@ export const PERMISSIONS = {
   'vat.declare': ['owner', 'admin', 'accountant'],
   'invoices.payments': ['owner', 'admin', 'clerk', 'accountant'],
   'b2c.manage': ['owner', 'admin', 'clerk', 'accountant'],
+  'billing.view': ['owner', 'admin', 'accountant'],
+  'billing.manage': ['owner', 'admin'],
 } as const satisfies Record<string, readonly Role[]>;
 
 export type Permission = keyof typeof PERMISSIONS;

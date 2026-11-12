@@ -86,6 +86,10 @@ export const GLOSSARY = {
     term: 'Approval',
     short: 'When switched on, invoices prepared by clerks or accountants wait for an owner or approver before going to NRS.',
   },
+  approvalLimit: {
+    term: 'Approval amount',
+    short: 'Invoices at or above this total need a second person (another owner or approver) to approve them before they go to NRS. Business and Pro plans.',
+  },
   firmCode: {
     term: 'Firm code',
     short: 'An 8-character code from your accounting firm. Entering it lets them work on your invoices and VAT. You can remove access any time.',

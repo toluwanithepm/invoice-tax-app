@@ -38,6 +38,10 @@ import { InvoicePaymentsController, ReportsController } from './reports/reports.
 import { B2cService } from './b2c/b2c.service';
 import { B2cController, B2cTemplateController } from './b2c/b2c.controller';
 import { FirmsService } from './firms/firms.service';
+import { BillingController, PaymentWebhookController, TestCheckoutController } from './billing/billing.controller';
+import { BillingService } from './billing/billing.service';
+import { PAYMENT_PROVIDER, paymentProviderFactory } from './billing/payment-provider';
+import { IrnCheckController } from './verification/irn.controller';
 import { FirmInvitationsController, FirmsController, WorkspaceFirmController } from './firms/firms.controller';
 
 /** Wraps each request in an AsyncLocalStorage context (request id, IP) used by logging, audit and RLS. */
@@ -101,6 +105,10 @@ class PlatformModule {}
     FirmInvitationsController,
     WorkspaceFirmController,
     PublicInvoicesController,
+    BillingController,
+    PaymentWebhookController,
+    TestCheckoutController,
+    IrnCheckController,
     InternalJobsController,
     HealthController,
     DevController,
@@ -114,6 +122,8 @@ class PlatformModule {}
     { provide: APP_GUARD, useClass: RateLimitGuard },
     { provide: ACCESS_POINT, useClass: MockAccessPoint },
     { provide: TAX_ID_REGISTRY, useClass: MockTaxIdRegistry },
+    { provide: PAYMENT_PROVIDER, useFactory: paymentProviderFactory },
+    BillingService,
     SessionService,
     AuthService,
     WorkspacesService,

@@ -1,16 +1,21 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Workspace } from '@prisma/client';
-import { taxBand, type WorkspaceCreate, type WorkspaceUpdate } from '@einv/shared';
+import { TRIAL_DAYS, planState, taxBand, type WorkspaceCreate, type WorkspaceUpdate } from '@einv/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../platform/audit.service';
-import { ACCESS_POINT, TAX_ID_REGISTRY, type AccessPointProvider, type TaxIdRegistry } from '../access-point/access-point';
+import {
+  ACCESS_POINT,
+  TAX_ID_REGISTRY,
+  type AccessPointProvider,
+  type TaxIdRegistry,
+} from '../access-point/access-point';
 import { buildUbl } from '../access-point/ubl';
-import { badRequest, notFound } from '../common/errors';
+import { badRequest, forbidden, notFound } from '../common/errors';
 import { decrypt, encrypt, uuidv7 } from '../common/crypto';
 import { num, numOrNull } from '../common/zod';
 import { ctx, requireUserId, requireWorkspaceId, setCtx } from '../common/request-context';
+import { BillingService } from '../billing/billing.service';
 
-const TRIAL_DAYS = 14;
 const sameName = (a?: string | null, b?: string | null) =>
   !!a && !!b && a.toLowerCase().replace(/[^a-z0-9]/g, '') === b.toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -40,10 +45,12 @@ export function workspaceDto(w: Workspace, opts: { revealBank?: boolean } = {}) 
     mbsStatus: w.mbsStatus,
     mbsTestIrn: w.mbsTestIrn,
     approvalRequired: w.approvalRequired,
+    approvalThreshold: numOrNull(w.approvalThreshold),
     require2fa: w.require2fa,
     b2cEnabled: w.b2cEnabled,
     plan: w.plan,
     trialEndsAt: w.trialEndsAt?.toISOString() ?? null,
+    planStatus: planState(w).status,
     createdAt: w.createdAt.toISOString(),
   };
 }
@@ -94,7 +101,12 @@ export class WorkspacesService {
       { workspaceId: id, userId },
     );
     setCtx({ workspaceId: id, role: 'owner' });
-    await this.audit.record({ entity: 'workspace', entityId: id, action: 'workspace.created', detail: { tinVerified: record.found } });
+    await this.audit.record({
+      entity: 'workspace',
+      entityId: id,
+      action: 'workspace.created',
+      detail: { tinVerified: record.found },
+    });
     return workspaceDto(ws);
   }
 
@@ -112,6 +124,15 @@ export class WorkspacesService {
 
   async update(input: WorkspaceUpdate) {
     const id = requireWorkspaceId();
+    if (input.approvalThreshold != null) {
+      const current = await this.raw();
+      if (!BillingService.allowsApprovalRules(current)) {
+        throw forbidden(
+          'Approval for large invoices is part of the Business and Pro plans. Upgrade to turn it on.',
+          'PLAN_FEATURE',
+        );
+      }
+    }
     const { bankAccountNumber, legalName, ...rest } = input;
     const data: Record<string, unknown> = { ...rest };
     if (legalName !== undefined) data.legalName = legalName;
@@ -124,7 +145,9 @@ export class WorkspacesService {
       entity: 'workspace',
       entityId: id,
       action: 'workspace.updated',
-      detail: { fields: Object.keys(input).map((k) => (k === 'bankAccountNumber' ? 'bankAccountNumber(masked)' : k)) },
+      detail: {
+        fields: Object.keys(input).map((k) => (k === 'bankAccountNumber' ? 'bankAccountNumber(masked)' : k)),
+      },
     });
     return workspaceDto(w);
   }
@@ -141,7 +164,12 @@ export class WorkspacesService {
         address: w.address ?? record.address ?? null,
       },
     });
-    await this.audit.record({ entity: 'workspace', entityId: w.id, action: 'workspace.tin_verified', detail: { found: record.found } });
+    await this.audit.record({
+      entity: 'workspace',
+      entityId: w.id,
+      action: 'workspace.tin_verified',
+      detail: { found: record.found },
+    });
     return {
       found: record.found,
       registryName: record.legalName ?? null,
@@ -156,17 +184,30 @@ export class WorkspacesService {
   }
 
   async setLogo(file: Express.Multer.File | undefined) {
-    if (!file) throw badRequest('Choose a PNG or JPEG image.', [{ field: 'logo', message: 'Choose a PNG or JPEG image.' }]);
+    if (!file)
+      throw badRequest('Choose a PNG or JPEG image.', [
+        { field: 'logo', message: 'Choose a PNG or JPEG image.' },
+      ]);
     const b = file.buffer;
     const isPng = b.length > 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
     const isJpeg = b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
-    if (!isPng && !isJpeg) throw badRequest('The logo must be a PNG or JPEG image.', [{ field: 'logo', message: 'Use a PNG or JPEG image.' }]);
-    if (b.length > 300 * 1024) throw badRequest('The logo must be smaller than 300 KB.', [{ field: 'logo', message: 'Use an image under 300 KB.' }]);
+    if (!isPng && !isJpeg)
+      throw badRequest('The logo must be a PNG or JPEG image.', [
+        { field: 'logo', message: 'Use a PNG or JPEG image.' },
+      ]);
+    if (b.length > 300 * 1024)
+      throw badRequest('The logo must be smaller than 300 KB.', [
+        { field: 'logo', message: 'Use an image under 300 KB.' },
+      ]);
     await this.prisma.scoped().workspace.update({
       where: { id: requireWorkspaceId() },
       data: { logo: b, logoMime: isPng ? 'image/png' : 'image/jpeg' },
     });
-    await this.audit.record({ entity: 'workspace', entityId: requireWorkspaceId(), action: 'workspace.logo_updated' });
+    await this.audit.record({
+      entity: 'workspace',
+      entityId: requireWorkspaceId(),
+      action: 'workspace.logo_updated',
+    });
     return { ok: true };
   }
 
@@ -183,13 +224,19 @@ export class WorkspacesService {
 
   async mbsConnect() {
     const w = await this.raw();
-    if (!w.tinVerifiedAt) throw badRequest('Verify your Tax ID before connecting to MBS.', [], 'TIN_NOT_VERIFIED');
+    if (!w.tinVerifiedAt)
+      throw badRequest('Verify your Tax ID before connecting to MBS.', [], 'TIN_NOT_VERIFIED');
     const r = await this.accessPoint.connectTaxpayer(w.tin);
     const updated = await this.prisma.scoped().workspace.update({
       where: { id: w.id },
       data: { mbsStatus: w.mbsStatus === 'not_connected' ? 'sandbox' : w.mbsStatus },
     });
-    await this.audit.record({ entity: 'workspace', entityId: w.id, action: 'mbs.connected', detail: { reference: r.reference } });
+    await this.audit.record({
+      entity: 'workspace',
+      entityId: w.id,
+      action: 'mbs.connected',
+      detail: { reference: r.reference },
+    });
     return workspaceDto(updated);
   }
 
@@ -206,10 +253,26 @@ export class WorkspacesService {
       seller: sellerParty(w),
       buyer: { name: 'MBS Sandbox Buyer', tin: '23456789-0001', address: 'Sandbox', kind: 'B2B' as const },
       original: null,
-      lines: [{ description: 'Sandbox test item', quantity: 1, unitPrice: 1000, discount: 0, vatTreatment: 'standard', vatRate: 0.075, net: 1000, vat: 75 }],
+      lines: [
+        {
+          description: 'Sandbox test item',
+          quantity: 1,
+          unitPrice: 1000,
+          discount: 0,
+          vatTreatment: 'standard',
+          vatRate: 0.075,
+          net: 1000,
+          vat: 75,
+        },
+      ],
       totals: { subtotal: 1000, discountTotal: 0, vatTotal: 75, total: 1075 },
     };
-    const result = await this.accessPoint.clear({ ...base, idempotencyKey: `sbx-${uuidv7()}`, sandbox: true, ublXml: buildUbl(base) });
+    const result = await this.accessPoint.clear({
+      ...base,
+      idempotencyKey: `sbx-${uuidv7()}`,
+      sandbox: true,
+      ublXml: buildUbl(base),
+    });
     if (result.status !== 'cleared') {
       return { passed: false, errors: result.errors, workspace: workspaceDto(w) };
     }
@@ -217,7 +280,12 @@ export class WorkspacesService {
       where: { id: w.id },
       data: { mbsStatus: w.mbsStatus === 'live' ? 'live' : 'sandbox_passed', mbsTestIrn: result.irn },
     });
-    await this.audit.record({ entity: 'workspace', entityId: w.id, action: 'mbs.sandbox_test_passed', detail: { irn: result.irn } });
+    await this.audit.record({
+      entity: 'workspace',
+      entityId: w.id,
+      action: 'mbs.sandbox_test_passed',
+      detail: { irn: result.irn },
+    });
     return { passed: true, irn: result.irn, workspace: workspaceDto(updated) };
   }
 

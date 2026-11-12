@@ -87,6 +87,8 @@ export const workspaceUpdateSchema = z.object({
     .optional()
     .nullable(),
   approvalRequired: z.boolean().optional(),
+  /** E9-3: invoices at or above this total (naira) need a second person to approve. Null turns it off. */
+  approvalThreshold: z.number().positive('Enter an amount above zero.').max(1e12).nullable().optional(),
   require2fa: z.boolean().optional(),
 });
 export type WorkspaceUpdate = z.infer<typeof workspaceUpdateSchema>;
@@ -202,3 +204,12 @@ export const firmClientCreateSchema = workspaceCreateSchema.extend({
 });
 export type FirmClientCreate = z.infer<typeof firmClientCreateSchema>;
 export const firmConnectSchema = z.object({ code: z.string().trim().toUpperCase().regex(/^[A-Z0-9]{8}$/, 'A firm code has 8 letters or digits.') });
+
+// ── Billing (E10) ────────────────────────────────────────────────────
+export const checkoutSchema = z.object({
+  plan: z.enum(['starter', 'business', 'pro']),
+  interval: z.enum(['monthly', 'yearly']),
+});
+export type CheckoutInput = z.infer<typeof checkoutSchema>;
+export const billingSettingsSchema = z.object({ autoRenew: z.boolean() });
+export const paymentReferenceSchema = z.object({ reference: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/) });

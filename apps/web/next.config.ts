@@ -43,6 +43,9 @@ const config: NextConfig = {
         ],
       },
       { source: '/i/:token*', headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }] },
+      // E8-1: the IRN check may scan a QR code with this site's own camera access (later rules win).
+      { source: '/verify', headers: [{ key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=()' }] },
+      { source: '/billing/test-checkout', headers: [{ key: 'X-Robots-Tag', value: 'noindex, nofollow' }] },
     ];
   },
 };

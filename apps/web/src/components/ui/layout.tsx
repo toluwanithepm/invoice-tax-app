@@ -91,11 +91,12 @@ export function Spinner({ label = 'Loading' }: { label?: string }) {
   );
 }
 
-export function Progress({ value, label }: { value: number; label: string }) {
+const progressTone = { brand: 'bg-brand-600', amber: 'bg-amber-500', red: 'bg-red-600' };
+export function Progress({ value, label, tone = 'brand' }: { value: number; label: string; tone?: keyof typeof progressTone }) {
   const pct = Math.round(Math.min(1, Math.max(0, value)) * 100);
   return (
     <div role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={label} className="h-2 overflow-hidden rounded-full bg-slate-100">
-      <div className="h-full rounded-full bg-brand-600 transition-all duration-500" style={{ width: `${pct}%` }} />
+      <div className={cn('h-full rounded-full transition-all duration-500', progressTone[tone])} style={{ width: `${pct}%` }} />
     </div>
   );
 }

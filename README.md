@@ -64,7 +64,8 @@ scope by **July 2027**. E-Invoice is the simple way for them to comply.
 - Live totals, autosave, and a pre-submission check in plain English
 - Credit notes and debit notes linked to the original IRN (approved invoices are never edited)
 - Share by WhatsApp, email or link; buyers get a mobile page and PDF
-- Approvals: clerks prepare, owners or approvers release
+- Approvals: clerks prepare, owners or approvers release; invoices above an amount you set need a second person
+- Check any supplier invoice at `/verify` by typing its IRN or scanning its QR code
 
 **Retail (B2C) sales**
 - Upload the day's till export; amounts can include VAT, dates can be day-first
@@ -80,6 +81,17 @@ scope by **July 2027**. E-Invoice is the simple way for them to comply.
 - One login for all clients; dashboard sorted by what needs attention
 - Clients link with an 8-character firm code and can remove access any time
 - Monthly firm bill per client
+
+**Plans and billing**
+- 14-day free trial with up to 20 approved invoices, no card needed
+- Starter ₦5,000 / Business ₦15,000 / Pro ₦40,000 a month (yearly = 10 months), paid by card, bank transfer or USSD
+- Usage meter with a warning at 80%; upgrades credit unused days, downgrades wait for renewal
+- Card renewals retried daily for 7 days before sending pauses; drafts and approved invoices always stay available
+- PDF receipts, emailed and downloadable
+
+![Plan & billing](docs/screenshots/billing.jpg)
+
+![Checking an invoice's IRN](docs/screenshots/verify.jpg)
 
 **Help built in**
 - ⓘ and underlined terms explain tax words where you meet them
@@ -111,11 +123,11 @@ More in the in-app [Help centre](apps/web/src/app/help/page.tsx) and [glossary](
 | 0–1 | Foundation, sign-in, onboarding, customers/products, invoices, NRS clearance, sharing, notes, roles, audit log | ✅ Built |
 | 2 | VAT reconciliation and exports, retail (B2C) daily reporting, accounting firm workspace | ✅ Built |
 | UX | Design system refresh, simplified navigation, explainers, welcome tour, Help centre, landing page | ✅ Built |
-| 3 | Subscription billing in Naira (Paystack/Flutterwave), threshold approvals, supplier IRN check | Next |
+| 3 | Plans and billing in naira (Paystack), approval above an amount, supplier IRN check | ✅ Built |
 | 4 | Live NRS Access Point integration and certification, WhatsApp Business API, load and penetration testing | Before launch |
 
-> **Note:** NRS/MBS, the Tax ID registry, SMS and WhatsApp currently run against **mock/sandbox
-> implementations** behind clean interfaces. Going live requires an accredited Access Point Provider (Phase 4).
+> **Note:** NRS/MBS, the Tax ID registry, SMS, WhatsApp and (until you add a Paystack key) payments
+> currently run against **mock/sandbox implementations** behind clean interfaces. Going live requires an accredited Access Point Provider (Phase 4).
 
 ## How it's built
 

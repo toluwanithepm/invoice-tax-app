@@ -37,10 +37,12 @@ export interface Workspace {
   mbsStatus: MbsStatus;
   mbsTestIrn: string | null;
   approvalRequired: boolean;
+  approvalThreshold: number | null;
   require2fa: boolean;
   b2cEnabled: boolean;
   plan: string;
   trialEndsAt: string | null;
+  planStatus: PlanStatus;
 }
 
 export interface Customer {
@@ -115,6 +117,7 @@ export interface Invoice extends InvoiceSummary {
   qrPayload: string | null;
   errors: PlainError[];
   attempts: number;
+  submittedBy: string | null;
   nextAttemptAt: string | null;
   history: { attempt: number; outcome: string; at: string; durationMs: number }[];
 }
@@ -132,4 +135,53 @@ export interface AuditEvent {
   action: string;
   detail: Record<string, unknown> | null;
   createdAt: string;
+}
+
+// ── Billing (E10) ────────────────────────────────────────────────────
+export type PlanStatus = 'trialing' | 'trial_ended' | 'active' | 'past_due' | 'lapsed';
+export interface BillingSummary {
+  plan: 'trial' | 'starter' | 'business' | 'pro';
+  planName: string;
+  interval: 'monthly' | 'yearly' | null;
+  status: PlanStatus;
+  statusLabel: string;
+  trialEndsAt: string | null;
+  currentPeriodEnd: string | null;
+  graceEndsAt: string | null;
+  autoRenew: boolean;
+  nextPlan: 'starter' | 'business' | 'pro' | null;
+  nextInterval: 'monthly' | 'yearly' | null;
+  card: { last4: string; brand: string | null; expiry: string | null } | null;
+  usage: { used: number; limit: number | null; share: number | null; since: string; warn: boolean };
+  canSend: boolean;
+  block: { code: string; message: string } | null;
+  checkoutAvailable: boolean;
+  testMode: boolean;
+}
+export interface PaymentRow {
+  id: string;
+  reference: string;
+  kind: 'checkout' | 'renewal';
+  plan: string;
+  planName: string;
+  interval: string;
+  amount: number;
+  credit: number;
+  status: 'success' | 'failed';
+  channel: string | null;
+  failureReason: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+  paidAt: string | null;
+  receiptNumber: string | null;
+  createdAt: string;
+}
+export interface IrnCheck {
+  valid: boolean;
+  irn: string | null;
+  reason?: 'not_found' | 'not_an_irn';
+  sellerTin?: string | null;
+  sellerName?: string | null;
+  total?: number | null;
+  issueDate?: string | null;
 }

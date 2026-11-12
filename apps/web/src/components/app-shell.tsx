@@ -23,6 +23,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import type { Permission } from '@einv/shared';
 import { Logo } from '@/components/auth-shell';
+import { PlanBanner } from '@/components/plan-banner';
 import { WelcomeTour } from '@/components/welcome-tour';
 import { Button } from '@/components/ui/button';
 import { Alert, Spinner } from '@/components/ui/layout';
@@ -98,7 +99,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <Link href="/help" className={linkCls(pathname.startsWith('/help'))}>
         <CircleHelp className="size-[18px]" aria-hidden /> Help & guides
       </Link>
-      <Link href={`${base}/settings`} className={linkCls(pathname.startsWith(`${base}/settings`) || pathname.startsWith(`${base}/audit`) || pathname.startsWith(`${base}/import`))}>
+      <Link href={`${base}/settings`} className={linkCls(pathname.startsWith(`${base}/settings`) || pathname.startsWith(`${base}/billing`) || pathname.startsWith(`${base}/audit`) || pathname.startsWith(`${base}/import`))}>
         <Settings className="size-[18px]" aria-hidden /> Settings
       </Link>
     </>
@@ -152,6 +153,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             You can draft invoices now. They can be sent to NRS once setup is complete — it takes about a minute.
           </Alert>
         )}
+        {ws.data.mbsStatus === 'live' && <PlanBanner />}
         <div className="mx-auto max-w-6xl animate-rise">{children}</div>
       </main>
 

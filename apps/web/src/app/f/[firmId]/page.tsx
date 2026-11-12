@@ -41,6 +41,10 @@ interface Dashboard {
     outputVatThisMonth: number;
     b2cMissingDays: number;
     attention: number;
+    planName: string;
+    planStatus: 'trialing' | 'trial_ended' | 'active' | 'past_due' | 'lapsed';
+    planStatusLabel: string;
+    planEndsAt: string | null;
   }[];
 }
 
@@ -127,6 +131,7 @@ export default function FirmPage() {
                   <tr>
                     <th className="px-5 py-2 font-medium">Client</th>
                     <th className="px-3 py-2 font-medium">NRS</th>
+                    <th className="px-3 py-2 font-medium">Plan</th>
                     <th className="px-3 py-2 text-right font-medium">Pending</th>
                     <th className="px-3 py-2 text-right font-medium">Rejected</th>
                     <th className="px-3 py-2 text-right font-medium">B2C missing</th>
@@ -146,6 +151,12 @@ export default function FirmPage() {
                       </td>
                       <td className="px-3 py-3">
                         <Badge tone={c.mbsStatus === 'live' ? 'green' : 'amber'}>{c.mbsStatus === 'live' ? 'Live' : 'Not live'}</Badge>
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className="block whitespace-nowrap">{c.planName}</span>
+                        <span className={cn('text-xs', c.planStatus === 'active' || c.planStatus === 'trialing' ? 'text-subtle' : 'font-medium text-red-700')}>
+                          {c.planStatus === 'active' || c.planStatus === 'trialing' ? `until ${shortDate(c.planEndsAt)}` : c.planStatusLabel}
+                        </span>
                       </td>
                       <td className="tabular px-3 py-3 text-right">
                         {c.drafts + c.awaitingApproval + c.inProgress || '—'}

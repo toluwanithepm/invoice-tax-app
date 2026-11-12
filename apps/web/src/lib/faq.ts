@@ -40,4 +40,16 @@ export const FAQ: { q: string; a: string }[] = [
     q: 'Do I need to install anything or be technical?',
     a: 'No. It works in your browser on a phone or computer. Connecting to NRS is three automatic steps that take about a minute.',
   },
+  {
+    q: 'How much does it cost?',
+    a: 'Every business starts with a free 14-day trial that includes up to 20 approved invoices, no card needed. Then Starter is ₦5,000 a month (50 invoices), Business ₦15,000 (500 invoices and approval for large invoices) and Pro ₦40,000 (unlimited). Pay yearly and get two months free. Pay by card, bank transfer or USSD.',
+  },
+  {
+    q: 'What happens if I reach my limit or my payment fails?',
+    a: 'Only sending to NRS pauses. You can still create drafts and open, share and download every approved invoice. We warn you at 80% of your monthly allowance, and if a renewal fails we keep trying for 7 days while sending carries on as normal.',
+  },
+  {
+    q: 'How do I check a supplier’s invoice is genuine?',
+    a: 'Open “Check an invoice” (at the bottom of every page, or einvoice.ng/verify), then type the IRN printed on the invoice or scan its QR code. Only claim VAT on supplier invoices that NRS has approved.',
+  },
 ];

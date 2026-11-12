@@ -74,6 +74,9 @@ export function SiteFooter() {
           <Link href="/help" className="block hover:text-ink">
             Help centre & glossary
           </Link>
+          <Link href="/verify" className="block hover:text-ink">
+            Check an invoice (IRN)
+          </Link>
           <Link href="/signup" className="block hover:text-ink">
             Create an account
           </Link>

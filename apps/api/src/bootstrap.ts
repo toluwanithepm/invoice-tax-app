@@ -38,7 +38,7 @@ export function configureApp(app: NestExpressApplication) {
 
 export async function createApp() {
   env(); // fail fast on bad configuration
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true, bodyParser: false });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true, bodyParser: false, rawBody: true });
   app.useLogger(app.get(Logger));
   return configureApp(app);
 }

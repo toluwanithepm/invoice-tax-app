@@ -14,8 +14,8 @@ import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Field, Input, Textarea } from '@/components/ui/form';
 import { Alert, Card, CardBody, CardHeader, PageHeader, Spinner, Steps } from '@/components/ui/layout';
-import { api, ApiError, errorMessage } from '@/lib/api';
-import { useRole, useWsId } from '@/lib/hooks';
+import { api, ApiError, errorMessage, planBlockToast } from '@/lib/api';
+import { useMe, useRole, useWorkspace, useWsId } from '@/lib/hooks';
 import type { Invoice } from '@/lib/types';
 import { dateTime, naira, shortDate, todayIso } from '@/lib/utils';
 
@@ -66,9 +66,15 @@ export default function InvoicePage() {
 function InvoiceView({ inv }: { inv: Invoice }) {
   const ws = useWsId();
   const { can } = useRole();
+  const me = useMe();
+  const workspace = useWorkspace();
   const router = useRouter();
   const qc = useQueryClient();
   const [share, setShare] = useState(false);
+  // E9-3: over the approval amount, the person who sent it can't also approve it.
+  const limit = workspace.data?.approvalThreshold ?? null;
+  const overLimit = limit !== null && inv.total >= limit;
+  const ownRequest = overLimit && !!me.data && inv.submittedBy === me.data.id;
   const [note, setNote] = useState<null | 'credit_note' | 'debit_note'>(null);
   const [busy, setBusy] = useState(false);
   const refresh = (r: Invoice) => {
@@ -83,7 +89,7 @@ function InvoiceView({ inv }: { inv: Invoice }) {
       refresh(r);
       toast.success(r.status === 'cleared' ? `Approved and cleared · IRN ${r.irn}` : 'Approved');
     } catch (err) {
-      toast.error(errorMessage(err));
+      if (!planBlockToast(err, ws, toast.error)) toast.error(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -116,7 +122,8 @@ function InvoiceView({ inv }: { inv: Invoice }) {
             tone="info"
             title="Waiting for approval"
             action={
-              can('invoices.approve') && (
+              can('invoices.approve') &&
+              !ownRequest && (
                 <div className="flex shrink-0 gap-2">
                   <Button size="sm" variant="secondary" onClick={decline}>
                     <X /> Send back
@@ -128,7 +135,10 @@ function InvoiceView({ inv }: { inv: Invoice }) {
               )
             }
           >
-            An approver needs to release this invoice before it goes to NRS.
+            {overLimit
+              ? `It is at or above your ${naira(limit)} approval amount, so someone other than the person who sent it must approve it.`
+              : 'An approver needs to release this invoice before it goes to NRS.'}
+            {ownRequest && ' We have let the other approvers know.'}
           </Alert>
         )}
 

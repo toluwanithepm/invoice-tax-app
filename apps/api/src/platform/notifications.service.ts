@@ -2,7 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { env } from '../config/env';
 
-export type Channel = 'email' | 'sms';
+/** WhatsApp goes to the console sink until a WhatsApp Business provider is connected (Phase 4). */
+export type Channel = 'email' | 'sms' | 'whatsapp';
 export interface OutgoingMessage {
   channel: Channel;
   recipient: string;
@@ -66,6 +67,11 @@ export class NotificationsService {
   private readonly log = new Logger('Notifications');
   private readonly email: Provider = env().EMAIL_PROVIDER === 'resend' ? new ResendProvider() : new ConsoleProvider();
   private readonly sms: Provider = env().SMS_PROVIDER === 'termii' ? new TermiiProvider() : new ConsoleProvider();
+  private readonly whatsapp: Provider = new ConsoleProvider();
+
+  private provider(channel: Channel): Provider {
+    return channel === 'email' ? this.email : channel === 'whatsapp' ? this.whatsapp : this.sms;
+  }
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -81,7 +87,7 @@ export class NotificationsService {
       },
     });
     try {
-      const ref = await (m.channel === 'email' ? this.email : this.sms).send(m);
+      const ref = await this.provider(m.channel).send(m);
       await this.prisma.outboxMessage.update({
         where: { id: row.id },
         data: { status: 'sent', sentAt: new Date(), providerRef: ref, attempts: 1 },
@@ -104,7 +110,7 @@ export class NotificationsService {
     });
     for (const p of pending) {
       try {
-        const ref = await (p.channel === 'email' ? this.email : this.sms).send({
+        const ref = await this.provider(p.channel as Channel).send({
           channel: p.channel as Channel,
           recipient: p.recipient,
           subject: p.subject ?? undefined,
