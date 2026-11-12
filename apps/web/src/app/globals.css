@@ -1,33 +1,71 @@
 @import 'tailwindcss';
 
+/*
+ * Design system v2 — "quiet and exact".
+ * - Flat surfaces: cards are white with one hairline border. No shadows on cards; elevation
+ *   (shadow-pop) is reserved for things that float above the page: menus, dialogs, popovers.
+ * - One accent: brand green only for primary actions and "Approved by NRS".
+ * - Sentence-case labels; no all-caps micro-text.
+ * - Geist for text, Geist Mono for identifiers (IRN, TIN, invoice numbers).
+ */
 @theme {
-  /* System fonts: zero font download keeps the shell small on 3G (NFR-2). */
-  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 
-  --color-brand-50: #eefbf3;
-  --color-brand-100: #d6f5e1;
-  --color-brand-200: #b0e9c8;
-  --color-brand-500: #16a34a;
-  --color-brand-600: #15803d;
-  --color-brand-700: #166534;
-  --color-brand-800: #14532d;
-  --color-brand-900: #0f3d22;
+  --color-brand-50: #f0f9f4;
+  --color-brand-100: #dcf1e5;
+  --color-brand-200: #b8e2cb;
+  --color-brand-300: #86cca6;
+  --color-brand-500: #23955a;
+  --color-brand-600: #187a46;
+  --color-brand-700: #13643a;
+  --color-brand-800: #105030;
+  --color-brand-900: #0c3b24;
 
-  --color-ink: #0f172a;
-  --color-muted: #475569;
-  --color-subtle: #64748b;
-  --color-line: #e2e8f0;
-  --color-canvas: #f8fafc;
+  --color-ink: #0b0f17;
+  --color-muted: #4b5262;
+  --color-subtle: #6b7280;
+  --color-line: #e8e9ec;
+  --color-line-strong: #d5d8de;
+  --color-canvas: #f7f7f8;
+  --color-surface: #ffffff;
+
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+
+  --shadow-pop: 0 16px 40px -12px rgb(11 15 23 / 0.22), 0 2px 6px -2px rgb(11 15 23 / 0.08);
+
+  --animate-fade-in: fade-in 140ms ease-out;
+  --animate-rise: rise 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
   }
   body {
-    @apply bg-canvas text-ink antialiased;
-    font-feature-settings: 'tnum' 1;
+    @apply bg-surface text-sm leading-[1.55] text-ink antialiased;
   }
   :focus-visible {
     @apply outline-2 outline-offset-2 outline-brand-600;
@@ -35,10 +73,26 @@
   h1,
   h2,
   h3 {
-    @apply tracking-tight;
+    @apply tracking-[-0.015em] text-ink;
+  }
+  ::selection {
+    @apply bg-brand-100;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 
 @utility tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* Quiet column headings for data tables. */
+@utility th-label {
+  @apply text-xs font-medium text-subtle;
 }

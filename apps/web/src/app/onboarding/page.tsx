@@ -7,6 +7,7 @@ import { Logo } from '@/components/auth-shell';
 import { BrandingForm } from '@/components/branding-form';
 import { Button } from '@/components/ui/button';
 import { Field, Input } from '@/components/ui/form';
+import { InfoTip, Term } from '@/components/ui/help';
 import { Alert, Card, Spinner } from '@/components/ui/layout';
 import { api, ApiError, errorMessage } from '@/lib/api';
 import type { Workspace } from '@/lib/types';
@@ -200,15 +201,23 @@ function BusinessStep({ workspace, onCreated, onNext }: { workspace: Workspace |
   return (
     <Card className="p-5 sm:p-6">
       <h1 className="text-xl font-semibold">Tell us about your business</h1>
-      <p className="mt-1 text-sm text-muted">We check your Tax ID with NRS and fill in what we can.</p>
+      <p className="mt-1 text-sm text-muted">
+        We check your Tax ID with <Term k="nrs" /> and fill in what we can. This takes about 30 seconds.
+      </p>
       <form onSubmit={submit} className="mt-6 space-y-4" noValidate>
         <Field id="legalName" label="Registered business name" error={errors.legalName}>
           <Input value={legalName} onChange={(e) => setLegalName(e.target.value)} autoComplete="organization" autoFocus />
         </Field>
-        <Field id="tin" label="Tax ID (TIN)" hint="As shown on your TIN certificate, e.g. 12345678-0001" error={errors.tin}>
+        <Field id="tin" label="Tax ID (TIN)" help={<InfoTip term="tin" />} hint="As shown on your TIN certificate, e.g. 12345678-0001" error={errors.tin}>
           <Input value={tin} onChange={(e) => setTin(e.target.value)} inputMode="numeric" placeholder="12345678-0001" />
         </Field>
-        <Field id="turnover" label="Annual turnover (₦)" hint="Used to work out your e-invoicing go-live date. Optional." error={errors.turnover}>
+        <Field
+          id="turnover"
+          label="Annual turnover (₦)"
+          help={<InfoTip title="Why we ask">E-invoicing starts on different dates depending on business size. We use this only to show your deadline.</InfoTip>}
+          hint="Optional"
+          error={errors.turnover}
+        >
           <Input value={turnover} onChange={(e) => setTurnover(e.target.value)} inputMode="numeric" placeholder="e.g. 450,000,000" />
         </Field>
         {general && <Alert tone="error">{general}</Alert>}
@@ -269,15 +278,17 @@ function ConnectStep({ workspace, onDone }: { workspace: Workspace; onDone: () =
   }
 
   const items = [
-    { title: 'Link your business to MBS', body: 'Through our accredited Access Point Provider. No technical setup for you.' },
-    { title: 'Clear a test invoice in the sandbox', body: testIrn ? `Test IRN ${testIrn}` : 'Proves the connection works end to end.' },
-    { title: 'Go live', body: 'Real invoices you submit are cleared by NRS.' },
+    { title: 'Link your business to NRS', body: 'Through our accredited partner. Nothing to install.' },
+    { title: 'Send a practice invoice', body: testIrn ? `Practice approved · ${testIrn}` : 'A test invoice to NRS’s practice system proves everything works. It is not real.' },
+    { title: 'Go live', body: 'From now on, invoices you send are approved by NRS for real.' },
   ];
 
   return (
     <Card className="p-5 sm:p-6">
       <h1 className="text-xl font-semibold">Connect to NRS</h1>
-      <p className="mt-1 text-sm text-muted">Three automatic steps. It usually takes under a minute.</p>
+      <p className="mt-1 text-sm text-muted">
+        Every invoice must go through NRS's <Term k="mbs">invoicing system</Term>. We connect you in three automatic steps — usually under a minute. You don't need any technical setup.
+      </p>
       <ol className="mt-6 space-y-4">
         {items.map((it, i) => (
           <li key={it.title} className="flex gap-3">

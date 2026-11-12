@@ -8,11 +8,12 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { DOC_TYPE_LABELS, VAT_LABELS } from '@einv/shared';
 import { InvoiceEditor } from '@/components/invoice-editor';
-import { StatusBadge } from '@/components/status';
+import { JOURNEY, StatusBadge } from '@/components/status';
+import { InfoTip } from '@/components/ui/help';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Field, Input, Textarea } from '@/components/ui/form';
-import { Alert, Card, CardBody, CardHeader, PageHeader, Spinner } from '@/components/ui/layout';
+import { Alert, Card, CardBody, CardHeader, PageHeader, Spinner, Steps } from '@/components/ui/layout';
 import { api, ApiError, errorMessage } from '@/lib/api';
 import { useRole, useWsId } from '@/lib/hooks';
 import type { Invoice } from '@/lib/types';
@@ -98,8 +99,13 @@ function InvoiceView({ inv }: { inv: Invoice }) {
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[1fr_320px]">
-      <div className="space-y-6">
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="min-w-0 space-y-6">
+        {inv.docType === 'invoice' && (
+          <Card className="px-5 py-4 sm:px-6">
+            <Steps steps={JOURNEY} current={inv.status === 'cleared' ? (inv.paidAt ? 4 : 2) : inv.status === 'pending_approval' || inv.status === 'queued' ? 1 : 0} failed={['rejected', 'failed'].includes(inv.status)} />
+          </Card>
+        )}
         {inv.status === 'queued' && (
           <Alert tone="warning" title="NRS isn't responding right now">
             We'll keep retrying automatically for up to 72 hours — attempt {inv.attempts}, next try {dateTime(inv.nextAttemptAt)}. You don't need to do anything.
@@ -129,7 +135,7 @@ function InvoiceView({ inv }: { inv: Invoice }) {
         <Card>
           <CardBody className="grid gap-6 sm:grid-cols-2">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-subtle">Bill to</p>
+              <p className="text-xs font-medium text-subtle">Bill to</p>
               <p className="mt-1 font-medium">{inv.buyer?.name ?? inv.customer?.name}</p>
               <p className="text-sm text-muted">TIN {inv.buyer?.tin ?? inv.customer?.tin}</p>
               {(inv.buyer?.address ?? inv.customer?.address) && <p className="text-sm text-muted">{inv.buyer?.address ?? inv.customer?.address}</p>}
@@ -163,7 +169,7 @@ function InvoiceView({ inv }: { inv: Invoice }) {
           </CardBody>
           <div className="overflow-x-auto border-t border-line">
             <table className="w-full min-w-[560px] text-sm">
-              <thead className="text-left text-xs uppercase tracking-wide text-subtle">
+              <thead className="text-left text-xs text-subtle">
                 <tr>
                   <th className="px-5 py-2 font-medium">Item</th>
                   <th className="px-3 py-2 text-right font-medium">Qty</th>
@@ -235,12 +241,14 @@ function InvoiceView({ inv }: { inv: Invoice }) {
           <Card className="border-brand-200">
             <CardBody className="text-center">
               <p className="flex items-center justify-center gap-1.5 text-sm font-semibold text-brand-800">
-                <ShieldCheck className="size-4" /> Cleared by NRS
+                <ShieldCheck className="size-4" /> Approved by NRS
               </p>
               <div className="mx-auto mt-3 w-fit rounded-lg border border-line bg-white p-2">
                 <QRCodeSVG value={inv.qrPayload} size={148} level="M" aria-label="NRS QR stamp" />
               </div>
-              <p className="mt-3 text-xs text-subtle">Invoice Reference Number</p>
+              <p className="mt-3 flex items-center justify-center gap-1 text-xs text-subtle">
+                Invoice Reference Number (IRN) <InfoTip term="irn" />
+              </p>
               <p className="break-all font-mono text-sm">{inv.irn}</p>
               <p className="mt-1 text-xs text-subtle">{dateTime(inv.clearedAt)}</p>
             </CardBody>
@@ -261,12 +269,19 @@ function InvoiceView({ inv }: { inv: Invoice }) {
             </Button>
             {inv.status === 'cleared' && inv.docType === 'invoice' && can('invoices.edit') && (
               <>
-                <Button variant="secondary" className="w-full" onClick={() => setNote('credit_note')}>
-                  <FileMinus2 /> Raise credit note
-                </Button>
-                <Button variant="secondary" className="w-full" onClick={() => setNote('debit_note')}>
-                  <FilePlus2 /> Raise debit note
-                </Button>
+                <div className="border-t border-line pt-3">
+                  <p className="mb-2 flex items-center gap-1 text-xs font-medium text-subtle">
+                    Need to change it? <InfoTip title="Changing an approved invoice">Approved invoices can't be edited. Use a credit note to reduce it (returns, refunds) or a debit note to add to it (under-billing).</InfoTip>
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button variant="secondary" size="sm" onClick={() => setNote('credit_note')}>
+                      <FileMinus2 /> Credit note
+                    </Button>
+                    <Button variant="secondary" size="sm" onClick={() => setNote('debit_note')}>
+                      <FilePlus2 /> Debit note
+                    </Button>
+                  </div>
+                </div>
               </>
             )}
             {['submitting', 'queued'].includes(inv.status) && (
@@ -332,7 +347,7 @@ function PaymentControl({ inv, onChange }: { inv: Invoice; onChange: (r: Invoice
 
 function History({ inv }: { inv: Invoice }) {
   if (!inv.history.length) return null;
-  const label: Record<string, string> = { cleared: 'Cleared', rejected: 'Rejected', unavailable: 'NRS unavailable — queued' };
+  const label: Record<string, string> = { cleared: 'Approved by NRS', rejected: 'NRS asked for changes', unavailable: 'NRS unavailable — waited and retried' };
   return (
     <Card>
       <CardHeader title="Submission history" />

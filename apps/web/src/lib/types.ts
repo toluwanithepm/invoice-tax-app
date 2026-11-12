@@ -38,6 +38,7 @@ export interface Workspace {
   mbsTestIrn: string | null;
   approvalRequired: boolean;
   require2fa: boolean;
+  b2cEnabled: boolean;
   plan: string;
   trialEndsAt: string | null;
 }

@@ -17,9 +17,9 @@ import { cn, naira, shortDate } from '@/lib/utils';
 const FILTERS = [
   { key: '', label: 'All' },
   { key: 'draft', label: 'Drafts' },
-  { key: 'pending_approval', label: 'Awaiting approval' },
-  { key: 'submitting,queued', label: 'In progress' },
-  { key: 'cleared', label: 'Cleared' },
+  { key: 'pending_approval', label: 'Needs approval' },
+  { key: 'submitting,queued', label: 'With NRS' },
+  { key: 'cleared', label: 'Approved' },
   { key: 'rejected,failed', label: 'Needs fixing' },
 ];
 
@@ -54,7 +54,7 @@ function InvoiceList() {
         description="Invoices, credit notes and debit notes"
         actions={
           can('invoices.edit') && (
-            <Button asChild>
+            <Button asChild className="lg:hidden">
               <Link href={`/w/${ws}/invoices/new`}>
                 <FilePlus2 /> New invoice
               </Link>
@@ -98,7 +98,7 @@ function InvoiceList() {
           <>
             {/* Desktop table */}
             <table className="hidden w-full text-sm md:table">
-              <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-subtle">
+              <thead className="border-b border-line text-left text-xs text-subtle">
                 <tr>
                   <th className="px-5 py-3 font-medium">Number</th>
                   <th className="px-3 py-3 font-medium">Customer</th>

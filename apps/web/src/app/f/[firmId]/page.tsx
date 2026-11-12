@@ -123,7 +123,7 @@ export default function FirmPage() {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[760px] text-sm">
-                <thead className="text-left text-xs uppercase tracking-wide text-subtle">
+                <thead className="text-left text-xs text-subtle">
                   <tr>
                     <th className="px-5 py-2 font-medium">Client</th>
                     <th className="px-3 py-2 font-medium">NRS</th>

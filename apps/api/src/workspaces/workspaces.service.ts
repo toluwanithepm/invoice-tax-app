@@ -41,6 +41,7 @@ export function workspaceDto(w: Workspace, opts: { revealBank?: boolean } = {}) 
     mbsTestIrn: w.mbsTestIrn,
     approvalRequired: w.approvalRequired,
     require2fa: w.require2fa,
+    b2cEnabled: w.b2cEnabled,
     plan: w.plan,
     trialEndsAt: w.trialEndsAt?.toISOString() ?? null,
     createdAt: w.createdAt.toISOString(),

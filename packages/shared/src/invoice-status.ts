@@ -23,14 +23,15 @@ export const INVOICE_STATUSES = [
 ] as const;
 export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 
+/** Plain-language status names: say what is happening, not the system state. */
 export const STATUS_LABELS: Record<InvoiceStatus, string> = {
   draft: 'Draft',
-  pending_approval: 'Waiting for approval',
-  submitting: 'Submitted',
-  queued: 'Queued — retrying',
-  cleared: 'Cleared',
-  rejected: 'Rejected',
-  failed: 'Failed',
+  pending_approval: 'Needs approval',
+  submitting: 'Sending to NRS',
+  queued: 'Waiting for NRS',
+  cleared: 'Approved by NRS',
+  rejected: 'Needs fixing',
+  failed: "Couldn't send",
 };
 
 const TRANSITIONS: Record<InvoiceStatus, readonly InvoiceStatus[]> = {

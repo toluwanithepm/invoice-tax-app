@@ -3,7 +3,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Field, Input } from '@/components/ui/form';
+import { Input, Label } from '@/components/ui/form';
+import { InfoTip } from '@/components/ui/help';
 import { Card, CardBody, CardHeader } from '@/components/ui/layout';
 import { api, ApiError, errorMessage } from '@/lib/api';
 import { useRole, useWsId } from '@/lib/hooks';
@@ -56,13 +57,27 @@ export function FirmLinkCard() {
             )}
           </div>
         ) : manage ? (
-          <form onSubmit={connect} className="flex flex-wrap items-end gap-2" noValidate>
-            <Field id="firm-code" label="Firm code" hint="8 letters or numbers, from your accountant." error={error} className="w-56">
-              <Input value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} maxLength={8} className="font-mono tracking-widest" />
-            </Field>
-            <Button type="submit" loading={busy} disabled={code.length !== 8} className="mb-5">
-              Give access
-            </Button>
+          <form onSubmit={connect} noValidate>
+            <Label htmlFor="firm-code">
+              Firm code <InfoTip term="firmCode" />
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                id="firm-code"
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                maxLength={8}
+                aria-invalid={!!error || undefined}
+                aria-describedby="firm-code-msg"
+                className="w-44 font-mono tracking-widest"
+              />
+              <Button type="submit" loading={busy} disabled={code.length !== 8}>
+                Give access
+              </Button>
+            </div>
+            <p id="firm-code-msg" role={error ? 'alert' : undefined} className={error ? 'mt-1.5 text-[13px] font-medium text-red-600' : 'mt-1.5 text-[13px] text-subtle'}>
+              {error ?? '8 letters or numbers, from your accountant.'}
+            </p>
           </form>
         ) : (
           <p className="text-sm text-muted">No accounting firm is linked.</p>

@@ -7,6 +7,7 @@ import { VAT_LABELS, type VatTreatment } from '@einv/shared';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Label, Select } from '@/components/ui/form';
+import { Term } from '@/components/ui/help';
 import { Alert, Badge, Card, CardBody, CardHeader, EmptyState, PageHeader, Spinner } from '@/components/ui/layout';
 import { api, errorMessage } from '@/lib/api';
 import { useRole, useWsId } from '@/lib/hooks';
@@ -131,7 +132,11 @@ export default function B2cPage() {
     <>
       <PageHeader
         title="Retail sales (B2C)"
-        description="Each day's sales go to NRS automatically just after midnight. They must be accepted within 24 hours."
+                description={
+          <>
+            For <Term k="b2c">sales to consumers</Term>, you report each day’s total instead of one invoice per sale. We send it automatically just after midnight; NRS must receive it within 24 hours.
+          </>
+        }
         actions={can('workspace.manage') && <Button variant="ghost" onClick={() => enable(false)}>Turn off</Button>}
       />
       {urgent.map((d) => (
@@ -146,7 +151,7 @@ export default function B2cPage() {
         <CardHeader title="Last 14 days" />
         <div className="overflow-x-auto">
           <table className="w-full min-w-[640px] text-sm">
-            <thead className="text-left text-xs uppercase tracking-wide text-subtle">
+            <thead className="text-left text-xs text-subtle">
               <tr>
                 <th className="px-5 py-2 font-medium">Day</th>
                 <th className="px-3 py-2 font-medium">Status</th>
@@ -228,7 +233,7 @@ function DayDialog({ date, onClose }: { date: string; onClose: () => void }) {
       ) : (
         <div className="max-h-[60vh] overflow-y-auto">
           <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-white text-left text-xs uppercase tracking-wide text-subtle">
+            <thead className="sticky top-0 bg-white text-left text-xs text-subtle">
               <tr>
                 <th className="py-2 font-medium">Receipt</th>
                 <th className="py-2 font-medium">Item</th>

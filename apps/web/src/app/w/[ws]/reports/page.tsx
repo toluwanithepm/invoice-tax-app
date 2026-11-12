@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { DOC_TYPE_LABELS, lagosToday, monthLabel, type DocType } from '@einv/shared';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Label, Select } from '@/components/ui/form';
+import { InfoTip } from '@/components/ui/help';
 import { Alert, Badge, Card, CardBody, CardHeader, EmptyState, PageHeader, Skeleton, Spinner } from '@/components/ui/layout';
 import { api, ApiError, errorMessage } from '@/lib/api';
 import { useRole, useWsId } from '@/lib/hooks';
@@ -51,7 +52,7 @@ function Reports() {
   const tab = params.get('tab') === 'vat' ? 'vat' : 'overview';
   return (
     <>
-      <PageHeader title="Reports & VAT" description="Sales, money owed to you, and your monthly VAT return." />
+      <PageHeader title="VAT & reports" description="See your sales and who owes you, and prepare your monthly VAT return." />
       <div role="tablist" aria-label="Report" className="mb-6 flex gap-1 border-b border-line">
         {[
           { key: 'overview', label: 'Overview' },
@@ -137,7 +138,7 @@ function Overview() {
           action={
             <div className="flex gap-1 rounded-lg bg-slate-100 p-1 text-sm" role="tablist" aria-label="Show">
               {(['all', 'overdue'] as const).map((k) => (
-                <button key={k} role="tab" aria-selected={show === k} onClick={() => setShow(k)} className={cn('rounded-md px-2.5 py-1', show === k ? 'bg-white shadow-sm' : 'text-muted')}>
+                <button key={k} role="tab" aria-selected={show === k} onClick={() => setShow(k)} className={cn('rounded-md px-2.5 py-1', show === k ? 'bg-white' : 'text-muted')}>
                   {k === 'all' ? 'All' : 'Overdue'}
                 </button>
               ))}
@@ -323,9 +324,16 @@ function VatReconciliation() {
         <>
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
             <Card>
-              <CardHeader title={`Output VAT — ${r.monthLabel}`} description={`Return due ${shortDate(r.dueDate)}`} />
+              <CardHeader
+                title={
+                  <span className="flex items-center gap-1">
+                    VAT you charged in {r.monthLabel} <InfoTip term="outputVat" />
+                  </span>
+                }
+                description={`Your VAT return for this month is due ${shortDate(r.dueDate)}.`}
+              />
               <table className="w-full text-sm">
-                <thead className="text-left text-xs uppercase tracking-wide text-subtle">
+                <thead className="text-left text-xs text-subtle">
                   <tr>
                     <th className="px-5 py-2 font-medium">Source</th>
                     <th className="px-3 py-2 text-right font-medium">Count</th>
@@ -334,28 +342,28 @@ function VatReconciliation() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
-                  <Row label="Cleared invoices" count={r.invoices.count} net={r.invoices.net} vat={r.invoices.vat} />
-                  <Row label="Cleared debit notes" count={r.debitNotes.count} net={r.debitNotes.net} vat={r.debitNotes.vat} />
-                  <Row label="Cleared credit notes (deducted)" count={r.creditNotes.count} net={-r.creditNotes.net} vat={-r.creditNotes.vat} />
-                  <Row label={r.b2c.enabled ? 'Retail sales (B2C days accepted)' : 'Retail sales (B2C off)'} count={r.b2c.days} net={r.b2c.net} vat={r.b2c.vat} />
+                  <Row label="Approved invoices" count={r.invoices.count} net={r.invoices.net} vat={r.invoices.vat} />
+                  <Row label="Debit notes" count={r.debitNotes.count} net={r.debitNotes.net} vat={r.debitNotes.vat} />
+                  <Row label="Credit notes (deducted)" count={r.creditNotes.count} net={-r.creditNotes.net} vat={-r.creditNotes.vat} />
+                  <Row label={r.b2c.enabled ? 'Retail sales (B2C)' : 'Retail sales (off)'} count={r.b2c.days} net={r.b2c.net} vat={r.b2c.vat} />
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-line font-semibold">
+                  <tr className="border-t border-line-strong font-semibold">
                     <td className="px-5 py-3" colSpan={3}>
-                      Output VAT
+                      VAT to pay
                     </td>
                     <td className="tabular px-5 py-3 text-right">{naira(r.outputVat)}</td>
                   </tr>
                 </tfoot>
               </table>
               <div className="border-t border-line px-5 py-3">
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-subtle">By VAT treatment</p>
-                <dl className="grid gap-1 text-sm sm:grid-cols-3">
+                <p className="mb-2 text-xs font-medium text-subtle">By VAT treatment</p>
+                <dl className="divide-y divide-line text-sm">
                   {r.byTreatment.map((t) => (
-                    <div key={t.treatment}>
+                    <div key={t.treatment} className="flex items-baseline justify-between gap-4 py-2">
                       <dt className="text-muted">{TREATMENT_LABELS[t.treatment]}</dt>
-                      <dd className="tabular">
-                        {naira(t.net)} net · {naira(t.vat)} VAT
+                      <dd className="tabular text-right">
+                        {naira(t.net)} <span className="text-subtle">net</span> · {naira(t.vat)} <span className="text-subtle">VAT</span>
                       </dd>
                     </div>
                   ))}
@@ -452,9 +460,9 @@ function Row({ label, count, net, vat }: { label: string; count: number; net: nu
   return (
     <tr>
       <td className="px-5 py-2.5">{label}</td>
-      <td className="tabular px-3 py-2.5 text-right">{count}</td>
-      <td className="tabular px-3 py-2.5 text-right">{naira(net)}</td>
-      <td className="tabular px-5 py-2.5 text-right">{naira(vat)}</td>
+      <td className={cn('tabular px-3 py-2.5 text-right', !count && 'text-subtle')}>{count || '—'}</td>
+      <td className={cn('tabular px-3 py-2.5 text-right', !count && 'text-subtle')}>{count ? naira(net) : '—'}</td>
+      <td className={cn('tabular px-5 py-2.5 text-right', !count && 'text-subtle')}>{count ? naira(vat) : '—'}</td>
     </tr>
   );
 }

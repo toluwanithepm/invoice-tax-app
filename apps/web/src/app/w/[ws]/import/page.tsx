@@ -201,7 +201,7 @@ function Importer() {
           {result.errors.length > 0 ? (
             <div className="max-h-96 overflow-y-auto">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-white text-left text-xs uppercase tracking-wide text-subtle">
+                <thead className="sticky top-0 bg-white text-left text-xs text-subtle">
                   <tr>
                     <th className="px-5 py-2 font-medium">Row</th>
                     <th className="px-3 py-2 font-medium">Column</th>

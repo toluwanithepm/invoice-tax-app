@@ -22,6 +22,7 @@ const config: NextConfig = {
   // Monorepo root (stops Next picking up unrelated lockfiles higher up the disk).
   outputFileTracingRoot: path.join(__dirname, '../..'),
   poweredByHeader: false,
+  devIndicators: false,
   reactStrictMode: true,
   transpilePackages: ['@einv/shared'],
   // The browser only ever talks to this origin; /api/* is proxied to the Nest API.

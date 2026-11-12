@@ -28,7 +28,7 @@ function csrfToken() {
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
-async function request<T>(method: Method, path: string, body?: unknown): Promise<T> {
+async function request<T>(method: Method, path: string, body?: unknown, opts: { silent?: boolean } = {}): Promise<T> {
   const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
   const res = await fetch(`/api${path}`, {
     method,
@@ -52,7 +52,7 @@ async function request<T>(method: Method, path: string, body?: unknown): Promise
       p.errors ?? [],
       data as Record<string, unknown>,
     );
-    handleAuthRedirects(err);
+    if (!opts.silent) handleAuthRedirects(err);
     throw err;
   }
   return data as T;
@@ -66,11 +66,11 @@ function safeJson(text: string) {
   }
 }
 
-const PUBLIC_PATHS = ['/login', '/signup', '/i/', '/2fa'];
+const PUBLIC_PATHS = ['/login', '/signup', '/i/', '/2fa', '/help'];
 function handleAuthRedirects(err: ApiError) {
   if (typeof window === 'undefined') return;
   const here = window.location.pathname;
-  if (PUBLIC_PATHS.some((p) => here.startsWith(p))) return;
+  if (here === '/' || PUBLIC_PATHS.some((p) => here.startsWith(p))) return;
   if (err.status === 401 && err.code === 'MFA_REQUIRED') {
     window.location.assign(`/2fa?next=${encodeURIComponent(here + window.location.search)}`);
   } else if (err.status === 401) {
@@ -80,6 +80,8 @@ function handleAuthRedirects(err: ApiError) {
 
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
+  /** GET that never redirects to sign-in (for public pages that adapt to signed-in users). */
+  peek: <T>(path: string) => request<T>('GET', path, undefined, { silent: true }),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body ?? {}),
   put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
   patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),

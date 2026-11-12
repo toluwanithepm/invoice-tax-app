@@ -10,7 +10,9 @@ import { CustomerForm } from '@/components/customer-form';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Field, Input, Label, Select, Textarea } from '@/components/ui/form';
-import { Alert, Card, CardBody, CardHeader } from '@/components/ui/layout';
+import { Alert, Card, CardBody, CardHeader, Steps } from '@/components/ui/layout';
+import { InfoTip, Term } from '@/components/ui/help';
+import { JOURNEY } from '@/components/status';
 import { api, ApiError, errorMessage } from '@/lib/api';
 import { useRole, useWorkspace, useWsId } from '@/lib/hooks';
 import type { Customer, Invoice, Page, PlainError, Product } from '@/lib/types';
@@ -92,6 +94,8 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
   const [problems, setProblems] = useState<PlainError[]>(invoice?.errors ?? []);
   const [submitting, setSubmitting] = useState(false);
   const [addCustomer, setAddCustomer] = useState(false);
+  // Progressive disclosure: most invoices have no discount, so the column appears only on request.
+  const [showDiscount, setShowDiscount] = useState(() => !!invoice?.lines.some((l) => l.discount > 0));
   const dirty = useRef(false);
   const inflight = useRef<Promise<string | null> | null>(null);
   const isNote = invoice && invoice.docType !== 'invoice';
@@ -218,6 +222,9 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
       <div className="min-w-0 space-y-6">
+        <Card className="px-5 py-4 sm:px-6">
+          <Steps steps={JOURNEY} current={0} />
+        </Card>
         {isNote && invoice?.originalInvoice && (
           <Alert tone="info" title={`${DOC_TYPE_LABELS[invoice.docType]} against ${invoice.originalInvoice.number}`}>
             IRN {invoice.originalInvoice.irn} · Reason: {invoice.reason}
@@ -267,14 +274,21 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
         </Card>
 
         <Card className="@container">
-          <CardHeader title="Items" description="VAT is worked out for each line: standard 7.5%, zero-rated or exempt." />
+          <CardHeader title="What you're selling" description="Start typing to pick a saved product. VAT is worked out for you." />
           <div className="divide-y divide-line">
-            <div className="hidden grid-cols-[minmax(9rem,1fr)_56px_96px_80px_112px_96px_32px] gap-2 px-5 py-2 text-xs font-medium uppercase tracking-wide text-subtle @3xl:grid">
+            <div
+              className={cn(
+                'hidden gap-2 px-5 py-2 text-xs font-medium text-subtle @3xl:grid',
+                showDiscount ? 'grid-cols-[minmax(9rem,1fr)_56px_96px_80px_112px_96px_32px]' : 'grid-cols-[minmax(9rem,1fr)_56px_104px_128px_104px_32px]',
+              )}
+            >
               <span>Description</span>
               <span className="text-right">Qty</span>
               <span className="text-right">Unit price</span>
-              <span className="text-right">Discount</span>
-              <span>VAT</span>
+              {showDiscount && <span className="text-right">Discount</span>}
+              <span className="flex items-center gap-1">
+                VAT <InfoTip term="vatTreatment" />
+              </span>
               <span className="text-right">Amount</span>
               <span />
             </div>
@@ -283,7 +297,12 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
               const err = lineError(i);
               return (
                 <div key={l.key} className={cn('px-4 py-3 @3xl:px-5', err && 'bg-red-50/50')}>
-                  <div className="grid grid-cols-2 gap-2 @3xl:grid-cols-[minmax(9rem,1fr)_56px_96px_80px_112px_96px_32px] @3xl:items-start">
+                  <div
+                    className={cn(
+                      'grid grid-cols-2 gap-2 @3xl:items-start',
+                      showDiscount ? '@3xl:grid-cols-[minmax(9rem,1fr)_56px_96px_80px_112px_96px_32px]' : '@3xl:grid-cols-[minmax(9rem,1fr)_56px_104px_128px_104px_32px]',
+                    )}
+                  >
                     <div className="col-span-2 @3xl:col-span-1">
                       <label className="sr-only" htmlFor={`d-${l.key}`}>
                         Line {i + 1} description
@@ -305,7 +324,7 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
                     </div>
                     <LineInput label="Qty" value={l.quantity} onChange={(v) => updateLine(l.key, { quantity: v })} invalid={!!fieldError(`lines.${i}.quantity`)} />
                     <LineInput label="Unit price (₦)" value={l.unitPrice} onChange={(v) => updateLine(l.key, { unitPrice: v })} invalid={!!fieldError(`lines.${i}.quantity`)} />
-                    <LineInput label="Discount (₦)" value={l.discount} onChange={(v) => updateLine(l.key, { discount: v })} />
+                    {showDiscount && <LineInput label="Discount (₦)" value={l.discount} onChange={(v) => updateLine(l.key, { discount: v })} />}
                     <div>
                       <label className="mb-1 block text-xs text-subtle @3xl:sr-only" htmlFor={`v-${l.key}`}>
                         VAT
@@ -352,9 +371,16 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
             ))}
           </datalist>
           <div className="border-t border-line px-5 py-3">
-            <Button type="button" variant="secondary" size="sm" onClick={() => update({ lines: [...form.lines, blankLine()] })}>
-              <Plus /> Add line
-            </Button>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button type="button" variant="secondary" size="sm" onClick={() => update({ lines: [...form.lines, blankLine()] })}>
+                <Plus /> Add another item
+              </Button>
+              {!showDiscount && (
+                <button type="button" className="text-sm font-medium text-brand-700 hover:underline" onClick={() => setShowDiscount(true)}>
+                  Add a discount
+                </button>
+              )}
+            </div>
           </div>
         </Card>
 
@@ -379,7 +405,12 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
               <Row label="Total" value={naira(totals.total)} strong />
             </div>
           </CardBody>
-          <div className="space-y-2 border-t border-line p-4">
+          <div className="space-y-3 border-t border-line p-4">
+            {canClear && (
+              <p className="text-[13px] leading-relaxed text-muted">
+                We check it for common mistakes, then send it to <Term k="nrs" /> for <Term k="clearance">approval</Term>. Approved invoices get an <Term k="irn" /> and can't be edited.
+              </p>
+            )}
             <Button className="w-full" size="lg" onClick={submit} loading={submitting} disabled={submitBlocked}>
               {canClear ? <ShieldCheck /> : <Send />} {submitLabel}
             </Button>
@@ -421,6 +452,20 @@ export function InvoiceEditor({ invoice }: { invoice?: Invoice }) {
           </Button>
         )}
       </aside>
+
+      <div className="h-20 xl:hidden" aria-hidden />
+      {/* Phones: the total and the main action stay in reach while scrolling the items. */}
+      <div className="fixed inset-x-0 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-20 border-t border-line bg-white/95 px-4 py-3 backdrop-blur lg:bottom-0 xl:hidden">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
+          <div>
+            <p className="text-xs text-subtle">Total incl. VAT</p>
+            <p className="tabular text-lg font-semibold">{naira(totals.total)}</p>
+          </div>
+          <Button onClick={submit} loading={submitting} disabled={submitBlocked}>
+            {canClear ? <ShieldCheck /> : <Send />} {canClear ? 'Submit' : 'Send for approval'}
+          </Button>
+        </div>
+      </div>
 
       <Dialog open={addCustomer} onOpenChange={setAddCustomer} title="Add a customer">
         <CustomerForm

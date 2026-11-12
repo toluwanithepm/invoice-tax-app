@@ -1,5 +1,6 @@
 'use client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { toast } from 'sonner';
@@ -22,9 +23,14 @@ const TABS = [
   { key: 'members', label: 'Team' },
   { key: 'security', label: 'Security' },
 ] as const;
+const LINKS = [
+  { href: 'audit', label: 'Activity log' },
+  { href: 'import', label: 'Import data' },
+];
 
 function Settings() {
   const ws = useWorkspace();
+  const wsId = useWsId();
   const params = useSearchParams();
   const router = useRouter();
   const tab = (params.get('tab') ?? 'business') as (typeof TABS)[number]['key'];
@@ -44,6 +50,11 @@ function Settings() {
           >
             {t.label}
           </button>
+        ))}
+        {LINKS.map((l) => (
+          <Link key={l.href} href={`/w/${wsId}/${l.href}`} className="-mb-px shrink-0 border-b-2 border-transparent px-3 py-2 text-sm font-medium text-muted hover:text-ink">
+            {l.label}
+          </Link>
         ))}
       </div>
       {tab === 'business' && <BusinessTab ws={ws.data} canManage={can('workspace.manage')} />}

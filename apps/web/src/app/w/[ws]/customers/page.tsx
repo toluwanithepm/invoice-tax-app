@@ -43,7 +43,7 @@ export default function CustomersPage() {
     <>
       <PageHeader
         title="Customers"
-        description="Saved with their Tax IDs so you never retype them."
+        description="The businesses and government bodies you invoice. Save them once and pick them on any invoice."
         actions={
           can('records.edit') && (
             <>

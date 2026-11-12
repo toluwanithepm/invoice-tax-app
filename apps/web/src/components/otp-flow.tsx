@@ -140,7 +140,7 @@ export function OtpFlow({ mode }: { mode: 'login' | 'signup' }) {
               setIdentifier('');
               setError(null);
             }}
-            className={`rounded-md py-1.5 font-medium ${channel === c ? 'bg-white shadow-sm' : 'text-muted'}`}
+            className={`rounded-md py-1.5 font-medium ${channel === c ? 'bg-white' : 'text-muted'}`}
           >
             {c === 'email' ? 'Email' : 'Phone'}
           </button>

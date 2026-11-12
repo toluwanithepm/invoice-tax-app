@@ -59,7 +59,7 @@ export default function PublicInvoicePage() {
   const s = inv.seller;
   return (
     <main id="main" className="mx-auto max-w-2xl px-4 py-6 sm:py-10">
-      <article className="overflow-hidden rounded-2xl border border-line bg-white shadow-sm">
+      <article className="overflow-hidden rounded-xl border border-line bg-white">
         <header className="flex items-start justify-between gap-4 border-b border-line p-5 sm:p-6" style={{ borderTop: `4px solid ${s.brandColor ?? '#166534'}` }}>
           <div className="min-w-0">
             {s.hasLogo && (
@@ -72,7 +72,7 @@ export default function PublicInvoicePage() {
             </p>
           </div>
           <div className="text-right">
-            <p className="text-xs font-medium uppercase tracking-wide text-subtle">{DOC_TYPE_LABELS[inv.docType]}</p>
+            <p className="text-xs font-medium text-subtle">{DOC_TYPE_LABELS[inv.docType]}</p>
             <p className="font-semibold">{inv.number}</p>
             <p className="text-xs text-muted">{shortDate(inv.issueDate)}</p>
           </div>
@@ -80,12 +80,12 @@ export default function PublicInvoicePage() {
 
         <section className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
           <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-subtle">Billed to</p>
+            <p className="text-xs font-medium text-subtle">Billed to</p>
             <p className="mt-1 font-medium">{inv.buyer?.name}</p>
             <p className="text-sm text-muted">TIN {inv.buyer?.tin}</p>
           </div>
           <div className="sm:text-right">
-            <p className="text-xs font-medium uppercase tracking-wide text-subtle">Amount due</p>
+            <p className="text-xs font-medium text-subtle">Amount due</p>
             <p className="tabular mt-1 text-2xl font-semibold">{naira(inv.total)}</p>
             {inv.dueDate && <p className="text-sm text-muted">by {shortDate(inv.dueDate)}</p>}
           </div>

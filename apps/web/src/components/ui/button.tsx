@@ -4,18 +4,20 @@ import { Loader2 } from 'lucide-react';
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
+/** 40px default (44px hit area on touch via padding in layouts); flat, no shadows. */
 const buttonVariants = cva(
   'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0',
   {
     variants: {
       variant: {
-        primary: 'bg-brand-700 text-white hover:bg-brand-800 shadow-sm',
-        secondary: 'bg-white text-ink border border-line hover:bg-slate-50 shadow-sm',
+        primary: 'bg-brand-700 text-white hover:bg-brand-800',
+        secondary: 'border border-line-strong bg-surface text-ink hover:bg-slate-50',
         ghost: 'text-muted hover:bg-slate-100 hover:text-ink',
-        danger: 'bg-red-600 text-white hover:bg-red-700 shadow-sm',
-        link: 'text-brand-700 underline-offset-4 hover:underline px-0 h-auto',
+        soft: 'bg-brand-50 text-brand-800 hover:bg-brand-100',
+        danger: 'bg-red-600 text-white hover:bg-red-700',
+        link: 'h-auto px-0 text-brand-700 underline-offset-4 hover:underline',
       },
-      size: { sm: 'h-8 px-3', md: 'h-10 px-4', lg: 'h-12 px-6 text-base', icon: 'h-9 w-9' },
+      size: { sm: 'h-8 px-3 text-[13px]', md: 'h-10 px-4', lg: 'h-11 px-5', icon: 'size-10' },
     },
     defaultVariants: { variant: 'primary', size: 'md' },
   },

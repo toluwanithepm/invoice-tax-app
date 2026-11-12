@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { isValidTin, normaliseTin } from '@einv/shared';
 import { Button } from '@/components/ui/button';
 import { Field, Input, Select } from '@/components/ui/form';
+import { InfoTip } from '@/components/ui/help';
 import { Alert } from '@/components/ui/layout';
 import { api, ApiError, errorMessage } from '@/lib/api';
 import type { Customer } from '@/lib/types';
@@ -68,10 +69,10 @@ export function CustomerForm({ ws, customer, onSaved, onCancel }: { ws: string; 
         <Input value={v.name} onChange={set('name')} autoFocus autoComplete="organization" />
       </Field>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Field id="c-tin" label="Tax ID (TIN)" error={errors.tin} hint="Required for B2B and B2G invoices">
+        <Field id="c-tin" label="Tax ID (TIN)" help={<InfoTip term="tin" />} error={errors.tin} hint="We check it with NRS as you type">
           <Input value={v.tin} onChange={set('tin')} onBlur={checkTin} placeholder="12345678-0001" inputMode="numeric" />
         </Field>
-        <Field id="c-kind" label="Customer type" error={errors.kind}>
+        <Field id="c-kind" label="Customer type" help={<InfoTip title="Business or government?">Choose B2B for companies and B2G for ministries or agencies. Both need the customer's Tax ID. For sales to ordinary consumers, use Retail sales instead.</InfoTip>} error={errors.kind}>
           <Select value={v.kind} onChange={set('kind')}>
             <option value="B2B">Business (B2B)</option>
             <option value="B2G">Government (B2G)</option>

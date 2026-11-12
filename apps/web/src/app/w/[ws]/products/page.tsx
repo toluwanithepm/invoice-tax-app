@@ -8,6 +8,7 @@ import { VAT_LABELS, VAT_TREATMENTS, type VatTreatment } from '@einv/shared';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { Field, Input, Select } from '@/components/ui/form';
+import { InfoTip } from '@/components/ui/help';
 import { Alert, Badge, Card, EmptyState, PageHeader, Spinner } from '@/components/ui/layout';
 import { api, ApiError, errorMessage } from '@/lib/api';
 import { useRole, useWsId } from '@/lib/hooks';
@@ -25,7 +26,7 @@ export default function ProductsPage() {
     <>
       <PageHeader
         title="Products and services"
-        description="Each item carries its VAT treatment, so invoice totals are always right."
+        description="Save what you sell once, with its price and VAT, and pick it on any invoice."
         actions={
           can('records.edit') && (
             <>
@@ -122,7 +123,7 @@ function ProductForm({ ws, product, onDone }: { ws: string; product?: Product; o
         <Field id="p-price" label="Unit price (₦, before VAT)" error={errors.unitPrice}>
           <Input value={v.unitPrice} onChange={set('unitPrice')} inputMode="decimal" />
         </Field>
-        <Field id="p-vat" label="VAT treatment" error={errors.vatTreatment}>
+        <Field id="p-vat" label="VAT treatment" help={<InfoTip term="vatTreatment" />} error={errors.vatTreatment}>
           <Select value={v.vatTreatment} onChange={set('vatTreatment')}>
             <option value="">Choose…</option>
             {VAT_TREATMENTS.map((t) => (

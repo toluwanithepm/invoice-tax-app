@@ -31,7 +31,7 @@ export class RateLimitService {
 
   /** Housekeeping, called by the jobs drain. */
   async purgeOlderThan(hours = 24) {
-    await this.prisma.$executeRaw`DELETE FROM app.rate_limit_buckets WHERE window_start < now() - make_interval(hours => ${hours})`;
+    await this.prisma.$executeRaw`DELETE FROM app.rate_limit_buckets WHERE window_start < now() - make_interval(hours => ${hours}::int)`;
   }
 }
 
