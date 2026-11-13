@@ -31,6 +31,8 @@ const EnvSchema = z.object({
   WHATSAPP_PROVIDER: z.enum(['console']).default('console'),
   /** E10-2 payment gateway. `mock` gives a built-in test checkout and is refused in production. */
   PAYMENT_PROVIDER: z.enum(['mock', 'paystack']).default('mock'),
+  /** Where payment reconciliation problems are emailed (optional). */
+  OPS_ALERT_EMAIL: z.string().email().optional(),
   PAYSTACK_SECRET_KEY: z.string().regex(/^sk_(test|live)_/, 'must be a Paystack secret key (sk_test_… or sk_live_…)').optional(),
 });
 

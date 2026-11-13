@@ -33,6 +33,16 @@ import { PrismaService } from '../prisma/prisma.service';
 import { PAYMENT_PROVIDER, type PaymentProvider, type PaymentResult } from './payment-provider';
 
 export const RENEW_JOB = 'billing.renew';
+export const RECONCILE_JOB = 'billing.reconcile';
+/** Pending payments are re-checked with the gateway after this long. */
+const SWEEP_MIN_AGE_SEC = 5 * 60;
+/** Unpaid checkouts are closed after this long. */
+const ABANDON_AFTER_MS = 48 * 3_600_000;
+/** The daily reconciliation looks back this far, so late webhooks and transfers are caught. */
+const RECONCILE_LOOKBACK_MS = 3 * 86_400_000;
+/** Deterministic per workspace, period and attempt, so the gateway refuses a repeated charge. */
+const renewalPrefix = (workspaceId: string, periodEnd: Date) =>
+  `einv-rn-${workspaceId.replace(/-/g, '')}-${Math.floor(periodEnd.getTime() / 1000)}`;
 const DAY = 86_400_000;
 
 const newReference = () => `einv-${randomBytes(12).toString('hex')}`;
@@ -76,6 +86,20 @@ export class BillingService implements OnModuleInit {
     this.jobs.register(RENEW_JOB, (p: { periodEnd: string; attempt: number }) =>
       this.renew(p.periodEnd, p.attempt ?? 0),
     );
+    this.jobs.register(RECONCILE_JOB, async () => {
+      await this.reconcile();
+    });
+    // Runs on every jobs drain (each minute in production); throttled here.
+    let lastSweep = 0;
+    this.jobs.registerMaintenance(async () => {
+      if (Date.now() - lastSweep >= 5 * 60_000) {
+        lastSweep = Date.now();
+        await this.sweep();
+      }
+      // Once a day (Lagos date), deduplicated in the job table so many instances queue it once.
+      const day = new Date(Date.now() + 3_600_000).toISOString().slice(0, 10);
+      await this.jobs.enqueue(RECONCILE_JOB, { day }, { dedupeKey: `reconcile:${day}` });
+    });
   }
 
   private workspace() {
@@ -143,7 +167,7 @@ export class BillingService implements OnModuleInit {
 
   async payments() {
     const rows = await this.prisma.scoped().payment.findMany({
-      where: { status: { in: ['success', 'failed'] } },
+      where: { status: { in: ['success', 'failed', 'refund_pending', 'refunded', 'refund_failed'] } },
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
@@ -158,7 +182,12 @@ export class BillingService implements OnModuleInit {
       credit: p.credit,
       status: p.status,
       channel: p.channel,
-      failureReason: p.status === 'failed' ? (p.failureReason ?? 'Payment did not go through') : null,
+      failureReason:
+        p.status === 'failed'
+          ? (p.failureReason ?? 'Payment did not go through')
+          : p.status.startsWith('refund')
+            ? 'Duplicate payment, refunded'
+            : null,
       periodStart: p.periodStart?.toISOString() ?? null,
       periodEnd: p.periodEnd?.toISOString() ?? null,
       paidAt: p.paidAt?.toISOString() ?? null,
@@ -211,6 +240,39 @@ export class BillingService implements OnModuleInit {
       credit = Math.min(list, prorationCredit({ ...current, periodEnd: ws.currentPeriodEnd }, new Date()));
     }
 
+    // A second tab or a retry reuses the checkout already open for the same plan, so the business
+    // can't end up paying twice. If that checkout was in fact paid, apply it instead.
+    const open = await this.prisma.scoped().payment.findFirst({
+      where: {
+        kind: 'checkout',
+        status: 'pending',
+        plan: target.plan,
+        interval: target.interval,
+        authorizationUrl: { not: null },
+        createdAt: { gt: new Date(Date.now() - 30 * 60_000) },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (open) {
+      const now = await this.settle(open.reference);
+      if (now?.status === 'success') {
+        return {
+          scheduled: false as const,
+          alreadyPaid: true as const,
+          reference: open.reference,
+          amount: open.amount,
+        };
+      }
+      if (now?.status === 'pending' && open.authorizationUrl) {
+        return {
+          scheduled: false as const,
+          authorizationUrl: open.authorizationUrl,
+          reference: open.reference,
+          amount: open.amount,
+        };
+      }
+    }
+
     const email = await this.payerEmail(ws);
     const amount = Math.max(MIN_CHARGE_KOBO, list - credit);
     const reference = newReference();
@@ -253,8 +315,13 @@ export class BillingService implements OnModuleInit {
           'BILLING_EMAIL_REJECTED',
         );
       }
-      throw new AppError(502, 'PAYMENT_GATEWAY_ERROR', "We couldn't reach the payment provider. You haven't been charged. Try again in a few minutes.");
+      throw new AppError(
+        502,
+        'PAYMENT_GATEWAY_ERROR',
+        "We couldn't reach the payment provider. You haven't been charged. Try again in a few minutes.",
+      );
     }
+    await this.prisma.scoped().payment.updateMany({ where: { reference }, data: { authorizationUrl } });
     await this.audit.record({
       entity: 'payment',
       entityId: reference,
@@ -313,24 +380,45 @@ export class BillingService implements OnModuleInit {
    * Applies a payment once. Safe to call from the return page, the webhook and renewals at the
    * same time: only the call that moves the row out of `pending` changes the plan.
    */
-  async settle(reference: string, known?: PaymentResult): Promise<Payment | null> {
+  async settle(
+    reference: string,
+    known?: PaymentResult,
+    opts: { reopen?: boolean } = {},
+  ): Promise<Payment | null> {
     const db = this.prisma.scoped();
-    const p = await db.payment.findUnique({ where: { reference } });
+    let p = await db.payment.findUnique({ where: { reference } });
     if (!p) return null;
-    if (p.status !== 'pending') return p;
+    const reopenable = opts.reopen && (p.status === 'failed' || p.status === 'abandoned');
+    if (p.status !== 'pending' && !reopenable) return p;
     const r = known ?? (await this.provider.verify(reference));
     if (r.status === 'pending') return p;
+    if (reopenable) {
+      // The gateway is the source of truth: a transfer can clear after we closed the checkout.
+      if (r.status !== 'success') return p;
+      await db.payment.updateMany({
+        where: { id: p.id, status: p.status },
+        data: { status: 'pending', failureReason: null },
+      });
+      await this.audit.record({
+        entity: 'payment',
+        entityId: reference,
+        action: 'billing.payment_reopened',
+        detail: { was: p.status },
+      });
+      p = (await db.payment.findUnique({ where: { reference } }))!;
+    }
+    const payment = p;
 
-    if (r.status !== 'success' || r.amountKobo !== p.amount || r.currency !== 'NGN') {
+    if (r.status !== 'success' || r.amountKobo !== payment.amount || r.currency !== 'NGN') {
       const reason =
         r.status === 'success' ? 'Amount did not match' : (r.message ?? 'Payment did not go through');
       if (r.status === 'success')
         this.log.error(
-          { reference, expected: p.amount, got: r.amountKobo, currency: r.currency },
+          { reference, expected: payment.amount, got: r.amountKobo, currency: r.currency },
           'Payment amount mismatch',
         );
       await db.payment.updateMany({
-        where: { id: p.id, status: 'pending' },
+        where: { id: payment.id, status: 'pending' },
         data: {
           status: r.status === 'abandoned' ? 'abandoned' : 'failed',
           failureReason: reason,
@@ -348,19 +436,38 @@ export class BillingService implements OnModuleInit {
 
     const paidAt = r.paidAt ?? new Date();
     const applied = await this.prisma.scopedTx(async (tx) => {
-      const ws = await tx.workspace.findUniqueOrThrow({ where: { id: p.workspaceId } });
+      // One settlement at a time per workspace, so two different payments can't both start a period.
+      await tx.$queryRaw`SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtext(${payment.workspaceId}))) AS l`;
+      const ws = await tx.workspace.findUniqueOrThrow({ where: { id: payment.workspaceId } });
+      // Another payment already settled after this one started: this one is a duplicate.
+      const dup = await tx.payment.findFirst({
+        where: { id: { not: payment.id }, status: 'success', paidAt: { gte: payment.createdAt } },
+        orderBy: { paidAt: 'asc' },
+      });
+      if (dup) {
+        const claimed = await tx.payment.updateMany({
+          where: { id: payment.id, status: 'pending' },
+          data: {
+            status: 'refund_pending',
+            channel: r.channel,
+            paidAt,
+            failureReason: `Duplicate of ${dup.reference}`,
+          },
+        });
+        return claimed.count ? { duplicate: dup.reference, ws } : null;
+      }
       // Renewals continue from the end of the paid period; new plans and upgrades start now.
-      const start = p.kind === 'renewal' && ws.currentPeriodEnd ? ws.currentPeriodEnd : paidAt;
-      const end = periodEnd(start, p.interval as BillingInterval);
+      const start = payment.kind === 'renewal' && ws.currentPeriodEnd ? ws.currentPeriodEnd : paidAt;
+      const end = periodEnd(start, payment.interval as BillingInterval);
       const moved = await tx.payment.updateMany({
-        where: { id: p.id, status: 'pending' },
+        where: { id: payment.id, status: 'pending' },
         data: {
           status: 'success',
           channel: r.channel,
           paidAt,
           periodStart: start,
           periodEnd: end,
-          receiptNumber: receiptNumber(p, paidAt),
+          receiptNumber: receiptNumber(payment, paidAt),
         },
       });
       if (!moved.count) return null;
@@ -368,8 +475,8 @@ export class BillingService implements OnModuleInit {
       await tx.workspace.update({
         where: { id: ws.id },
         data: {
-          plan: p.plan,
-          billingInterval: p.interval,
+          plan: payment.plan,
+          billingInterval: payment.interval,
           currentPeriodEnd: end,
           nextPlan: null,
           nextInterval: null,
@@ -386,14 +493,23 @@ export class BillingService implements OnModuleInit {
       return { ws, end };
     });
     if (!applied) return db.payment.findUnique({ where: { reference } });
+    if ('duplicate' in applied) {
+      await this.audit.record({
+        entity: 'payment',
+        entityId: reference,
+        action: 'billing.duplicate_detected',
+        detail: { duplicateOf: applied.duplicate, amount: payment.amount },
+      });
+      return this.completeRefund(reference, applied.ws);
+    }
 
     await this.jobs.enqueue(
       RENEW_JOB,
       { periodEnd: applied.end.toISOString(), attempt: 0 },
       {
         runAt: applied.end,
-        workspaceId: p.workspaceId,
-        dedupeKey: `renew:${p.workspaceId}:${applied.end.toISOString()}:0`,
+        workspaceId: payment.workspaceId,
+        dedupeKey: `renew:${payment.workspaceId}:${applied.end.toISOString()}:0`,
       },
     );
     await this.audit.record({
@@ -401,10 +517,10 @@ export class BillingService implements OnModuleInit {
       entityId: reference,
       action: 'billing.payment_succeeded',
       detail: {
-        plan: p.plan,
-        interval: p.interval,
-        amount: p.amount,
-        kind: p.kind,
+        plan: payment.plan,
+        interval: payment.interval,
+        amount: payment.amount,
+        kind: payment.kind,
         periodEnd: applied.end.toISOString(),
       },
     });
@@ -439,28 +555,70 @@ export class BillingService implements OnModuleInit {
     let renewed = false;
 
     if (ws.autoRenew && ws.cardAuthEnc) {
+      // Before charging, find out what happened to every earlier attempt for this period. A charge
+      // that timed out may have gone through; it must never be repeated.
+      const prefix = renewalPrefix(ws.id, ws.currentPeriodEnd);
+      const earlier = await this.prisma
+        .scoped()
+        .payment.findMany({ where: { kind: 'renewal', reference: { startsWith: prefix } } });
+      for (const e of earlier.filter((x) => x.status === 'pending')) {
+        const s = await this.settle(e.reference);
+        if (s?.status === 'success') return;
+        if (s?.status === 'pending') {
+          // Still unknown at the gateway: look again in an hour rather than risk a second charge.
+          const hour = Math.floor(Date.now() / 3_600_000);
+          await this.jobs.enqueue(
+            RENEW_JOB,
+            { periodEnd: periodEndIso, attempt },
+            {
+              runAt: new Date(Date.now() + 3_600_000),
+              workspaceId: ws.id,
+              dedupeKey: `renew:${ws.id}:${periodEndIso}:${attempt}:check:${hour}`,
+            },
+          );
+          return;
+        }
+      }
+      if (earlier.some((x) => x.status === 'success')) return;
+      const reference = `${prefix}-${attempt}`;
+      const already = earlier.find((x) => x.reference === reference);
       const email = ws.billingEmail ?? (await this.payerEmail(ws));
-      const reference = newReference();
-      await this.prisma.scoped().payment.create({
-        data: {
-          id: uuidv7(),
-          workspaceId: ws.id,
-          reference,
-          kind: 'renewal',
-          plan,
-          interval,
-          amount,
-          listPrice: amount,
-        },
-      });
-      const result = await this.provider.chargeAuthorization({
-        email,
-        amountKobo: amount,
-        reference,
-        authorizationCode: decrypt(ws.cardAuthEnc),
-      });
-      const settled = await this.settle(reference, result);
+      if (!already)
+        await this.prisma.scoped().payment.create({
+          data: {
+            id: uuidv7(),
+            workspaceId: ws.id,
+            reference,
+            kind: 'renewal',
+            plan,
+            interval,
+            amount,
+            listPrice: amount,
+          },
+        });
+      const result = already
+        ? null // this attempt already ran (the job was retried); its result is recorded
+        : await this.provider.chargeAuthorization({
+            email,
+            amountKobo: amount,
+            reference,
+            authorizationCode: decrypt(ws.cardAuthEnc),
+          });
+      const settled = result ? await this.settle(reference, result) : already;
       renewed = settled?.status === 'success';
+      if (settled?.status === 'pending') {
+        // Outcome unknown (timeout): the next run checks it with the gateway before doing anything else.
+        await this.jobs.enqueue(
+          RENEW_JOB,
+          { periodEnd: periodEndIso, attempt },
+          {
+            runAt: new Date(Date.now() + 3_600_000),
+            workspaceId: ws.id,
+            dedupeKey: `renew:${ws.id}:${periodEndIso}:${attempt}:unknown`,
+          },
+        );
+        return;
+      }
       if (!renewed && (attempt === 0 || attempt === GRACE_DAYS - 1)) {
         await this.notifyOwners(
           ws,
@@ -488,6 +646,218 @@ export class BillingService implements OnModuleInit {
         },
       );
     }
+  }
+
+  // ── Duplicate payments ────────────────────────────────────────────────
+
+  /** Refunds a payment marked `refund_pending` (a duplicate). Safe to retry. */
+  async completeRefund(reference: string, ws?: Workspace): Promise<Payment | null> {
+    const db = this.prisma.scoped();
+    const p = await db.payment.findUnique({ where: { reference } });
+    if (!p || p.status !== 'refund_pending') return p;
+    const workspace = ws ?? (await this.workspace());
+    const rf = await this.provider.refund(reference);
+    await db.payment.updateMany({
+      where: { id: p.id, status: 'refund_pending' },
+      data: rf.ok
+        ? { status: 'refunded' }
+        : {
+            status: 'refund_failed',
+            failureReason: `${p.failureReason ?? ''}; refund failed: ${rf.message ?? ''}`.slice(0, 300),
+          },
+    });
+    if (rf.ok) {
+      await this.audit.record({
+        entity: 'payment',
+        entityId: reference,
+        action: 'billing.duplicate_refunded',
+        detail: { amount: p.amount },
+      });
+      await this.notifyOwners(
+        workspace,
+        'We refunded a duplicate payment',
+        `We received a second payment of ${formatKobo(p.amount)} for ${workspace.legalName} for a period that was already paid, so we have refunded it in full. Banks usually return the money within 5-10 working days. Reference: ${reference}.`,
+      ).catch((err) => this.log.warn({ err }, 'Refund email failed'));
+    } else {
+      await this.flag(reference, p.workspaceId, 'refund_failed', { amount: p.amount, message: rf.message });
+    }
+    return db.payment.findUnique({ where: { reference } });
+  }
+
+  // ── Scheduled checks ──────────────────────────────────────────────────
+
+  /**
+   * Every 5 minutes: asks the gateway about payments still pending (missed webhooks, transfers
+   * that cleared after the tab closed, renewals that timed out) and retries unfinished refunds.
+   * Checkouts with no payment after 48 hours are closed.
+   */
+  async sweep(): Promise<{ checked: number; settled: number; abandoned: number }> {
+    const rows = await this.prisma.$queryRaw<
+      { reference: string; workspace_id: string; created_at: Date; status: string }[]
+    >`
+      SELECT * FROM app.stale_pending_payments(${SWEEP_MIN_AGE_SEC}::int, 100::int)`;
+    let settled = 0;
+    let abandoned = 0;
+    for (const row of rows) {
+      await runWithContext(
+        { requestId: `sweep:${row.reference}`, workspaceId: row.workspace_id, userId: null },
+        async () => {
+          try {
+            if (row.status === 'refund_pending') {
+              await this.completeRefund(row.reference);
+              return;
+            }
+            const s = await this.settle(row.reference);
+            if (s?.status === 'success') settled++;
+            if (
+              s?.status === 'pending' &&
+              Date.now() - new Date(row.created_at).getTime() > ABANDON_AFTER_MS
+            ) {
+              await this.prisma.scoped().payment.updateMany({
+                where: { reference: row.reference, status: 'pending', kind: 'checkout' },
+                data: { status: 'abandoned', failureReason: 'No payment received within 48 hours' },
+              });
+              abandoned++;
+            }
+          } catch (err) {
+            this.log.warn({ err, reference: row.reference }, 'Sweep could not check a payment');
+          }
+        },
+      );
+    }
+    return { checked: rows.length, settled, abandoned };
+  }
+
+  /**
+   * Daily: compares the gateway's successful payments (last 3 days) with ours, both ways.
+   * Fixes what it can (payments the gateway took but we never recorded) and flags the rest for a
+   * person: unknown references, amount mismatches, and payments we recorded that the gateway no
+   * longer shows as successful. Also re-queues any renewal job that went missing.
+   */
+  async reconcile(
+    now = new Date(),
+  ): Promise<{ gateway: number; fixed: number; discrepancies: number; renewalsQueued: number }> {
+    const from = new Date(now.getTime() - RECONCILE_LOOKBACK_MS);
+    const gateway = (await this.provider.listSuccessful(from, now)).filter((t) =>
+      t.reference.startsWith('einv-'),
+    );
+    const refs = gateway.map((t) => t.reference);
+    const ours = refs.length
+      ? await this.prisma.$queryRaw<
+          { reference: string; workspace_id: string; status: string; amount: number }[]
+        >`
+          SELECT * FROM app.payments_by_reference(${refs}::text[])`
+      : [];
+    const byRef = new Map(ours.map((o) => [o.reference, o]));
+    // Already-reported problems, loaded once so each new finding costs a single write.
+    const known = new Set(
+      (
+        await this.prisma.$queryRaw<{ reference: string; kind: string }[]>`
+          SELECT reference, kind FROM app.open_payment_discrepancies(now() - interval '400 days')`
+      ).map((k) => `${k.reference}|${k.kind}`),
+    );
+    const flag = async (
+      reference: string,
+      workspaceId: string | null,
+      kind: string,
+      detail: Record<string, unknown>,
+    ) => {
+      if (known.has(`${reference}|${kind}`)) return false;
+      known.add(`${reference}|${kind}`);
+      return this.flag(reference, workspaceId, kind, detail, true);
+    };
+    let fixed = 0;
+    let discrepancies = 0;
+
+    for (const t of gateway) {
+      const o = byRef.get(t.reference);
+      if (!o) {
+        if (await flag(t.reference, null, 'unknown_reference', { amount: t.amountKobo, paidAt: t.paidAt }))
+          discrepancies++;
+        continue;
+      }
+      if (o.amount !== t.amountKobo || t.currency !== 'NGN') {
+        if (
+          await flag(t.reference, o.workspace_id, 'amount_mismatch', {
+            ours: o.amount,
+            gateway: t.amountKobo,
+            currency: t.currency,
+          })
+        )
+          discrepancies++;
+        continue;
+      }
+      if (o.status === 'pending' || o.status === 'failed' || o.status === 'abandoned') {
+        const s = await runWithContext(
+          { requestId: `reconcile:${t.reference}`, workspaceId: o.workspace_id, userId: null },
+          () => this.settle(t.reference, undefined, { reopen: true }),
+        );
+        if (s && (s.status === 'success' || s.status === 'refunded' || s.status === 'refund_pending'))
+          fixed++;
+        else if (await flag(t.reference, o.workspace_id, 'not_applied', { status: s?.status ?? o.status }))
+          discrepancies++;
+      }
+    }
+
+    // The other direction: payments we recorded as paid that the gateway doesn't list as successful.
+    // Leave a 15-minute margin for gateway indexing.
+    const gatewayRefs = new Set(refs);
+    const settled = await this.prisma.$queryRaw<
+      { reference: string; workspace_id: string; amount: number }[]
+    >`
+      SELECT * FROM app.settled_payments_between(${from}, ${new Date(now.getTime() - 15 * 60_000)})`;
+    for (const s of settled) {
+      if (
+        !gatewayRefs.has(s.reference) &&
+        (await flag(s.reference, s.workspace_id, 'missing_at_gateway', { amount: s.amount }))
+      )
+        discrepancies++;
+    }
+
+    // Renewal safety net: every paid plan past its period end has a renewal job.
+    const due = await this.prisma.$queryRaw<{ workspace_id: string; current_period_end: Date }[]>`
+      SELECT * FROM app.paid_workspaces_past_period_end(500::int)`;
+    let renewalsQueued = 0;
+    for (const w of due) {
+      const end = new Date(w.current_period_end).toISOString();
+      const job = await this.jobs.enqueue(
+        RENEW_JOB,
+        { periodEnd: end, attempt: 0 },
+        { workspaceId: w.workspace_id, dedupeKey: `renew:${w.workspace_id}:${end}:0` },
+      );
+      if (job) renewalsQueued++;
+    }
+
+    const summary = { gateway: gateway.length, fixed, discrepancies, renewalsQueued };
+    this.log.log(summary, 'Payment reconciliation finished');
+    if (discrepancies > 0 && env().OPS_ALERT_EMAIL) {
+      await this.notifications.send({
+        channel: 'email',
+        recipient: env().OPS_ALERT_EMAIL!,
+        subject: `Payment reconciliation: ${discrepancies} item(s) need checking`,
+        body: `The daily payment check found ${discrepancies} new discrepancy(ies) and fixed ${fixed}. See app.payment_discrepancies (unresolved rows) for details.`,
+      });
+    }
+    return summary;
+  }
+
+  /** Records a discrepancy once per reference and kind. Returns true if it was new. */
+  private async flag(
+    reference: string,
+    workspaceId: string | null,
+    kind: string,
+    detail: Record<string, unknown>,
+    checked = false,
+  ): Promise<boolean> {
+    if (!checked) {
+      const before = await this.prisma.$queryRaw<{ n: bigint }[]>`
+      SELECT count(*) AS n FROM app.open_payment_discrepancies(now() - interval '400 days') WHERE reference = ${reference} AND kind = ${kind}`;
+      if (Number(before[0]?.n ?? 0) > 0) return false;
+    }
+    await this.prisma
+      .$executeRaw`SELECT app.record_payment_discrepancy(${reference}, ${workspaceId}::uuid, ${kind}, ${JSON.stringify(detail)}::jsonb)`;
+    this.log.error({ reference, workspaceId, kind, detail }, 'Payment discrepancy');
+    return true;
   }
 
   // ── Receipts ──────────────────────────────────────────────────────────

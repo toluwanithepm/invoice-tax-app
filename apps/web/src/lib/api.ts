@@ -66,7 +66,7 @@ function safeJson(text: string) {
   }
 }
 
-const PUBLIC_PATHS = ['/login', '/signup', '/i/', '/2fa', '/help', '/verify', '/billing/test-checkout'];
+const PUBLIC_PATHS = ['/login', '/signup', '/i/', '/2fa', '/help', '/privacy', '/verify', '/billing/test-checkout'];
 function handleAuthRedirects(err: ApiError) {
   if (typeof window === 'undefined') return;
   const here = window.location.pathname;

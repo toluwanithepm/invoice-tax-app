@@ -24,7 +24,11 @@ export function AuthShell({ title, subtitle, children, footer }: { title: string
           {footer && <div className="mt-8 text-sm text-muted">{footer}</div>}
         </div>
         <p className="text-xs text-subtle">
-          We process your data under the Nigeria Data Protection Act 2023 · DPO: dpo@einvoice.ng ·{' '}
+          We process your data under the Nigeria Data Protection Act 2023 ·{' '}
+          <Link href="/privacy" className="underline">
+            Privacy notice
+          </Link>{' '}
+          · DPO: dpo@einvoice.ng ·{' '}
           <Link href="/help" className="underline">
             Help
           </Link>

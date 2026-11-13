@@ -126,6 +126,30 @@ single `SECURITY DEFINER` function (`app.firm_dashboard`) that first checks the 
 - **Gateway seam**: `PaymentProvider` with `PaystackProvider` and `MockPaymentProvider`. The mock's
   test checkout page (`/billing/test-checkout`) only works outside production.
 
+## Payment idempotency and reconciliation
+
+| Risk | Protection |
+|---|---|
+| The same payment confirmed twice (return page, webhook, retries) | `settle()` only applies a payment when it moves the row out of `pending`; settled rows are locked by a trigger |
+| Two checkouts paid for one period (two tabs, double click) | Choosing the same plan again reuses the open checkout and its link. If two different checkouts are both paid, settlements run one at a time per workspace (Postgres advisory lock) and any payment that lands after another one settled is refunded in full (`refund_pending → refunded`), with an email to the owners |
+| A renewal charged twice after a timeout or crash | Renewal references are fixed per workspace, period and attempt (`einv-rn-<workspace>-<period end>-<attempt>`), so the gateway refuses to charge one twice. Before any charge, earlier attempts for the period are checked with the gateway. A timeout is recorded as *unknown*, never *failed*, and checked again in an hour instead of retrying the charge |
+| A confirmation that never arrives (closed tab, lost webhook, slow bank transfer) | **Sweeper**, every 5 minutes: asks the gateway about every payment still pending after 5 minutes and applies it; closes checkouts unpaid after 48 hours; finishes refunds that were interrupted |
+| Our records and the gateway drifting apart | **Daily reconciliation** (`billing.reconcile`, once per Lagos day): lists the gateway's successful payments for the last 3 days and compares both ways. Paid-but-unrecorded payments are applied (even if we had closed them); unknown references, amount mismatches, payments the gateway no longer shows (reversals) and failed refunds go to `app.payment_discrepancies` and, if `OPS_ALERT_EMAIL` is set, an email |
+| A renewal job lost | The daily run re-queues a renewal for every paid plan past its period end (deduplicated, so it never doubles up) |
+
+The checks look across all workspaces through narrow `SECURITY DEFINER` functions
+(`stale_pending_payments`, `payments_by_reference`, `settled_payments_between`,
+`paid_workspaces_past_period_end`, `record_payment_discrepancy`, `open_payment_discrepancies`) that return
+payment references and statuses only. Each payment is then handled in its own workspace's RLS context.
+Both checks run from the jobs drain (`POST /internal/jobs/run`, every minute), so they need no extra cron.
+
+To review open discrepancies:
+
+```sql
+SELECT * FROM app.open_payment_discrepancies(now() - interval '30 days');
+-- after checking one: UPDATE app.payment_discrepancies SET resolved_at = now() WHERE id = '…';
+```
+
 ## IRN check (E8-1)
 
 `GET /v1/public/irn?q=` accepts an IRN or the text inside an invoice QR code and asks MBS

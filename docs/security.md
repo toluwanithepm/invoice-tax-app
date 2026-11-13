@@ -111,6 +111,10 @@ via PITR restore to a new project + DNS switch. A daily restore test runs agains
 - Only owners and admins can pay or change the plan; owners, admins and accountants can see receipts.
 - The mock gateway and its test checkout are refused in production; without Paystack configured,
   production shows plans but takes no payment.
+- Payments are idempotent end to end: duplicate checkouts are reused or refunded, renewal charges
+  use fixed references and are never retried blind after a timeout, and a 5-minute sweeper plus a daily
+  reconciliation against the gateway catch anything missed (see architecture.md). Tested in
+  `test/payments.e2e.spec.ts`.
 - `/v1/public/irn` is rate-limited per IP and returns only what is printed on the invoice itself.
 
 ## 8b. Automated attack tests

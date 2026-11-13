@@ -168,7 +168,7 @@ export interface PaymentRow {
   interval: string;
   amount: number;
   credit: number;
-  status: 'success' | 'failed';
+  status: 'success' | 'failed' | 'refund_pending' | 'refunded' | 'refund_failed';
   channel: string | null;
   failureReason: string | null;
   periodStart: string | null;

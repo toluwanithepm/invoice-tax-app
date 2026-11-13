@@ -170,7 +170,9 @@ export function OtpFlow({ mode }: { mode: 'login' | 'signup' }) {
             onChange={(e) => setConsent(e.target.checked)}
             label={
               <>
-                I agree to the processing of my personal data as described in the <span className="font-medium underline">privacy notice</span>.
+                I agree to the processing of my personal data as described in the <Link href="/privacy" target="_blank" rel="noopener" className="font-medium text-brand-700 underline underline-offset-2">
+                  privacy notice
+                </Link>.
               </>
             }
           />

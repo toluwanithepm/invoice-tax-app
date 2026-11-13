@@ -547,7 +547,8 @@ model Payment {
   amount        Int // kobo actually charged
   listPrice     Int       @map("list_price") // kobo
   credit        Int       @default(0) // kobo of proration credit applied
-  status        String    @default("pending") // pending | success | failed | abandoned
+  status        String    @default("pending") // pending | success | failed | abandoned | refund_pending | refunded | refund_failed
+  authorizationUrl String? @map("authorization_url")
   channel       String?
   failureReason String?   @map("failure_reason")
   periodStart   DateTime? @map("period_start") @db.Timestamptz(3)
@@ -559,5 +560,20 @@ model Payment {
   updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@index([workspaceId, createdAt])
+  @@index([status, createdAt])
   @@map("payments")
+}
+
+/// Reconciliation findings that need a person (written by app.record_payment_discrepancy).
+model PaymentDiscrepancy {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  detectedAt  DateTime  @default(now()) @map("detected_at") @db.Timestamptz(3)
+  reference   String
+  workspaceId String?   @map("workspace_id") @db.Uuid
+  kind        String
+  detail      Json?
+  resolvedAt  DateTime? @map("resolved_at") @db.Timestamptz(3)
+
+  @@unique([reference, kind])
+  @@map("payment_discrepancies")
 }

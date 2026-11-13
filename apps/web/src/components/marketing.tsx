@@ -85,6 +85,9 @@ export function SiteFooter() {
           <p className="font-semibold text-ink">Privacy</p>
           <p>We process personal data under the Nigeria Data Protection Act 2023.</p>
           <p>Data Protection Officer: dpo@einvoice.ng</p>
+          <Link href="/privacy" className="block hover:text-ink">
+            Privacy notice
+          </Link>
         </div>
       </div>
     </footer>

@@ -175,11 +175,19 @@ function PlanPicker({ b, canManage }: { b: BillingSummary; canManage: boolean })
     if (!chosen) return;
     setBusy(true);
     try {
-      const r = await api.post<{ scheduled: true; effectiveAt: string } | { scheduled: false; authorizationUrl: string }>(`/v1/workspaces/${ws}/billing/checkout`, {
+      const r = await api.post<
+        { scheduled: true; effectiveAt: string } | { scheduled: false; alreadyPaid: true } | { scheduled: false; authorizationUrl: string }
+      >(`/v1/workspaces/${ws}/billing/checkout`, {
         plan: chosen,
         interval,
       });
-      if (r.scheduled) {
+      if (!r.scheduled && 'alreadyPaid' in r) {
+        // A checkout for this plan was already paid (e.g. in another tab): nothing more to pay.
+        await qc.invalidateQueries({ queryKey: ['billing', ws] });
+        await qc.invalidateQueries({ queryKey: ['payments', ws] });
+        toast.success(`Your payment for ${PLANS[chosen].name} already went through.`);
+        setChosen(null);
+      } else if (r.scheduled) {
         await qc.invalidateQueries({ queryKey: ['billing', ws] });
         toast.success(`You'll move to ${PLANS[chosen].name} on ${shortDate(r.effectiveAt)}.`);
         setChosen(null);
@@ -438,7 +446,9 @@ function Payments({ b, canManage }: { b: BillingSummary; canManage: boolean }) {
                   </p>
                 </div>
                 <span className="tabular">{formatKobo(p.amount)}</span>
-                {p.status === 'success' ? (
+                {p.status.startsWith('refund') ? (
+                  <Badge tone={p.status === 'refund_failed' ? 'amber' : 'neutral'}>{p.status === 'refund_failed' ? 'Refund pending' : 'Refunded'}</Badge>
+                ) : p.status === 'success' ? (
                   <Button asChild size="sm" variant="ghost" aria-label={`Download receipt ${p.receiptNumber}`}>
                     <a href={`/api/v1/workspaces/${ws}/billing/payments/${p.id}/receipt.pdf`}>
                       <Download /> PDF
