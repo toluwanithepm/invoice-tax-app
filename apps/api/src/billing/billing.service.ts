@@ -42,7 +42,7 @@ const ABANDON_AFTER_MS = 48 * 3_600_000;
 const RECONCILE_LOOKBACK_MS = 3 * 86_400_000;
 /** Deterministic per workspace, period and attempt, so the gateway refuses a repeated charge. */
 const renewalPrefix = (workspaceId: string, periodEnd: Date) =>
-  `einv-rn-${workspaceId.replace(/-/g, '')}-${Math.floor(periodEnd.getTime() / 1000)}`;
+  `einv-rn-${workspaceId.replace(/-/g, '')}-${periodEnd.getTime()}`; // full milliseconds: periods never share a prefix
 const DAY = 86_400_000;
 
 const newReference = () => `einv-${randomBytes(12).toString('hex')}`;
@@ -560,7 +560,7 @@ export class BillingService implements OnModuleInit {
       const prefix = renewalPrefix(ws.id, ws.currentPeriodEnd);
       const earlier = await this.prisma
         .scoped()
-        .payment.findMany({ where: { kind: 'renewal', reference: { startsWith: prefix } } });
+        .payment.findMany({ where: { kind: 'renewal', reference: { startsWith: `${prefix}-` } } });
       for (const e of earlier.filter((x) => x.status === 'pending')) {
         const s = await this.settle(e.reference);
         if (s?.status === 'success') return;

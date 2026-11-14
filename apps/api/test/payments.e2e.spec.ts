@@ -125,6 +125,18 @@ d('Payment integrity (e2e, real Postgres with RLS)', () => {
       expect(new Date(s.currentPeriodEnd).getTime()).toBeGreaterThan(Date.now() + 27 * 86_400_000);
     });
 
+    it('treats back-to-back periods as separate renewals, even within the same second', async () => {
+      const { ws } = await paidBusiness();
+      const base = Math.floor((Date.now() - 5 * MIN) / 1000) * 1000; // start of a second
+      const end1 = new Date(base + 100);
+      await db(ws).workspace.update({ where: { id: ws }, data: { currentPeriodEnd: end1 } });
+      await asSystem(ws, () => billing.renew(end1.toISOString(), 0));
+      const end2 = new Date(base + 600); // same second as end1
+      await db(ws).workspace.update({ where: { id: ws }, data: { currentPeriodEnd: end2 } });
+      await asSystem(ws, () => billing.renew(end2.toISOString(), 0));
+      expect(await db(ws).payment.count({ where: { kind: 'renewal', status: 'success' } })).toBe(2);
+    });
+
     it('charges once when the same renewal job runs twice at the same time', async () => {
       const { ws } = await paidBusiness();
       const end = new Date(Date.now() - MIN);
