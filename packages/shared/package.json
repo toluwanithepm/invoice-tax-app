@@ -16,8 +16,8 @@
   },
   "devDependencies": {
     "@einv/config": "workspace:*",
-    "typescript": "~5.7.2",
+    "typescript": "~5.9.3",
     "vite": "^7.1.0",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.1"
   }
 }
